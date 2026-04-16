@@ -20,6 +20,7 @@ export interface BotStateView {
   readonly x: number;
   readonly y: number;
   readonly heading: number;
+  readonly gunHeading: number;
   readonly energy: number;
   readonly velocity: number;
   readonly gunHeat: number;

@@ -13,6 +13,7 @@ export interface BotState {
   readonly position: Vec2;
   readonly velocity: number;      // scalar; direction is always heading
   readonly heading: number;       // degrees, 0 = north, clockwise
+  readonly gunHeading: number;    // absolute degrees; independent of body heading
   readonly energy: number;
   readonly gunHeat: number;
   readonly isAlive: boolean;
@@ -49,6 +50,7 @@ export interface BotCommand {
   readonly botId: string;
   readonly desiredVelocity?: number;   // units/tick; engine applies accel/decel limits
   readonly turnDegrees?: number;       // body rotation (signed, clamped to MAX_TURN_RATE)
+  readonly turnGunDegrees?: number;    // gun rotation, independent of body
   readonly fire?: boolean;             // fire a bullet this tick (ignored if gun heat > 0)
 }
 

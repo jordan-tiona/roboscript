@@ -7,7 +7,7 @@ export const TRACKER_BOT_CODE = `class MyRobot extends Robot {
                   ?? this.enemies.find(e => e.alive && e.lastSeen !== null);
 
       if (target) {
-        await this.turnToward(target);
+        await this.aimToward(target);
         await this.fire();
         await this.move(80);
         await this.turn(20);

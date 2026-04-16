@@ -3,38 +3,41 @@ import { Editor } from "./ui/Editor.js";
 import { Arena } from "./ui/Arena.js";
 import type { ArenaHandle } from "./ui/Arena.js";
 import { Controls } from "./ui/Controls.js";
+import { BotSelector } from "./ui/BotSelector.js";
 import { GameLoop } from "./game/GameLoop.js";
 import type { BotEntry } from "./game/GameDriver.js";
 import { BUILT_IN_BOTS } from "./bots/index.js";
 import { DEFAULT_BOT_CODE } from "./bots/default.js";
 
-
-const opponent = BUILT_IN_BOTS[0]!.entry;
+const ALL_BOT_IDS = new Set(BUILT_IN_BOTS.map((b) => b.id));
 
 export function App() {
   const [botACode, setBotACode] = useState(DEFAULT_BOT_CODE);
   const [running, setRunning] = useState(false);
+  const [selectedOpponents, setSelectedOpponents] = useState<Set<string>>(ALL_BOT_IDS);
   const arenaRef = useRef<ArenaHandle>(null);
   const loopRef = useRef<GameLoop | null>(null);
-  const [key, setKey] = useState(0); // forces Editor remount on reset
-
-  const bots = useRef<BotEntry[]>([]);
+  const [key, setKey] = useState(0);
 
   const handleStart = useCallback(() => {
     const canvas = arenaRef.current?.getCanvas();
     if (!canvas) return;
 
-    bots.current = [
-      { id: "bot-1", name: "MyRobot", code: botACode },
-      opponent,
+    const opponents = BUILT_IN_BOTS
+      .filter((b) => selectedOpponents.has(b.id))
+      .map((b) => b.entry);
+
+    const bots: BotEntry[] = [
+      { id: "bot-player", name: "MyRobot", code: botACode },
+      ...opponents,
     ];
 
-    const loop = new GameLoop(canvas, bots.current);
-    loop.start(bots.current).then(() => {
+    const loop = new GameLoop(canvas, bots, handleStop);
+    loop.start(bots).then(() => {
       loopRef.current = loop;
       setRunning(true);
     });
-  }, [botACode]);
+  }, [botACode, selectedOpponents]);
 
   const handleStop = useCallback(() => {
     loopRef.current?.stop();
@@ -44,12 +47,17 @@ export function App() {
 
   const handleReset = useCallback(() => {
     handleStop();
-    setKey((k) => k + 1); // remount editor to clear any stale state
+    setKey((k) => k + 1);
   }, [handleStop]);
+
+  const opponentNames = BUILT_IN_BOTS
+    .filter((b) => selectedOpponents.has(b.id))
+    .map((b) => b.name)
+    .join(", ") || "none";
 
   return (
     <div style={{ display: "flex", height: "100vh", background: "#0d0d1a", color: "#eee" }}>
-      {/* Left panel: editor + controls */}
+      {/* Left panel: editor + bot selector + controls */}
       <div
         style={{
           width: "420px",
@@ -72,6 +80,11 @@ export function App() {
           bot-1 · MyRobot.js
         </div>
         <Editor key={key} initialCode={botACode} onChange={setBotACode} />
+        <BotSelector
+          selected={selectedOpponents}
+          onChange={setSelectedOpponents}
+          disabled={running}
+        />
         <Controls running={running} onStart={handleStart} onStop={handleStop} onReset={handleReset} />
       </div>
 
@@ -92,7 +105,7 @@ export function App() {
         </div>
         <Arena ref={arenaRef} />
         <div style={{ fontFamily: "monospace", fontSize: "11px", color: "#444" }}>
-          opponent: {opponent.name}
+          opponents: {opponentNames}
         </div>
       </div>
     </div>

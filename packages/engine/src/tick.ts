@@ -1,5 +1,5 @@
-import type { GameState, BotCommand, GameEvent, BotState } from "./types.js";
-import { ARENA_WIDTH, ARENA_HEIGHT, MAX_ENERGY } from "./constants.js";
+import type { GameState, BotCommand, GameEvent, BotState, Vec2 } from "./types.js";
+import { ARENA_WIDTH, ARENA_HEIGHT, MAX_ENERGY, BOT_RADIUS } from "./constants.js";
 import {
   applyBotCommand,
   createBullet,
@@ -79,26 +79,57 @@ export function tick(state: GameState, commands: readonly BotCommand[]): GameSta
   };
 }
 
+/**
+ * For each bot, pick the random candidate position that maximises the minimum
+ * distance to already-placed bots and arena edges. More candidates = better
+ * spread at the cost of a tiny bit of startup time.
+ */
+function generateSpawnPositions(count: number): Vec2[] {
+  const margin = BOT_RADIUS + 30;
+  const safeW = ARENA_WIDTH  - margin * 2;
+  const safeH = ARENA_HEIGHT - margin * 2;
+  const CANDIDATES = 64;
+  const placed: Vec2[] = [];
+
+  for (let i = 0; i < count; i++) {
+    let best: Vec2 = { x: ARENA_WIDTH / 2, y: ARENA_HEIGHT / 2 };
+    let bestScore = -1;
+
+    for (let c = 0; c < CANDIDATES; c++) {
+      const x = margin + Math.random() * safeW;
+      const y = margin + Math.random() * safeH;
+
+      // Score: minimum distance to any edge or already-placed bot
+      let score = Math.min(x - margin, y - margin, ARENA_WIDTH - margin - x, ARENA_HEIGHT - margin - y);
+      for (const p of placed) {
+        const d = Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2);
+        if (d < score) score = d;
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        best = { x, y };
+      }
+    }
+
+    placed.push(best);
+  }
+
+  return placed;
+}
+
 export function buildInitialState(
   botDefs: Array<{ id: string; name: string }>,
 ): GameState {
-  const startPositions = [
-    { x: 100, y: 100 },
-    { x: 700, y: 100 },
-    { x: 100, y: 500 },
-    { x: 700, y: 500 },
-    { x: 400, y: 100 },
-    { x: 400, y: 500 },
-    { x: 100, y: 300 },
-    { x: 700, y: 300 },
-  ];
+  const positions = generateSpawnPositions(botDefs.length);
 
   const bots: BotState[] = botDefs.map((def, i) => ({
     id: def.id,
     name: def.name,
-    position: startPositions[i % startPositions.length] ?? { x: 400, y: 300 },
+    position: positions[i] ?? { x: ARENA_WIDTH / 2, y: ARENA_HEIGHT / 2 },
     velocity: 0,
-    heading: (i * 90) % 360,
+    heading: Math.random() * 360,
+    gunHeading: Math.random() * 360,
     energy: MAX_ENERGY,
     gunHeat: 3,
     isAlive: true,

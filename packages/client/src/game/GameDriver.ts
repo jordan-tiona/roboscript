@@ -157,6 +157,7 @@ export class GameDriver {
           x: bot.position.x,
           y: bot.position.y,
           heading: bot.heading,
+          gunHeading: bot.gunHeading,
           energy: bot.energy,
           velocity: bot.velocity,
           gunHeat: bot.gunHeat,

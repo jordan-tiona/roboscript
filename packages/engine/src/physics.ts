@@ -16,11 +16,11 @@ import {
   ACCELERATION,
   DECELERATION,
   MAX_TURN_RATE,
+  MAX_GUN_TURN_RATE,
   GUN_COOLING_RATE,
   GUN_HEAT_PER_SHOT,
   BULLET_DAMAGE,
   BULLET_HIT_ENERGY_BONUS,
-  WALL_DAMAGE_FACTOR,
   BULLET_SPEED,
   MAX_ENERGY,
 } from "./constants.js";
@@ -35,7 +35,9 @@ export function applyBotCommand(
   if (!bot.isAlive) return { next: bot, event: null };
 
   const dBody = clamp(cmd?.turnDegrees ?? 0, -MAX_TURN_RATE, MAX_TURN_RATE);
-  const newHeading = normalizeAngle(bot.heading + dBody);
+  const dGun  = clamp(cmd?.turnGunDegrees ?? 0, -MAX_GUN_TURN_RATE, MAX_GUN_TURN_RATE);
+  const newHeading    = normalizeAngle(bot.heading + dBody);
+  const newGunHeading = normalizeAngle(bot.gunHeading + dGun);
 
   // Velocity with acceleration/deceleration limits
   const desired = clamp(cmd?.desiredVelocity ?? bot.velocity, -MAX_SPEED, MAX_SPEED);
@@ -51,8 +53,7 @@ export function applyBotCommand(
   const xClamped = clamp(nx, BOT_RADIUS, ARENA_WIDTH - BOT_RADIUS);
   const yClamped = clamp(ny, BOT_RADIUS, ARENA_HEIGHT - BOT_RADIUS);
   if (xClamped !== nx || yClamped !== ny) {
-    const damage = Math.abs(vel) * WALL_DAMAGE_FACTOR;
-    wallEvent = { type: "hitWall", botId: bot.id, damage };
+    wallEvent = { type: "hitWall", botId: bot.id, damage: 0 };
     vel = 0;
     nx = xClamped;
     ny = yClamped;
@@ -65,8 +66,9 @@ export function applyBotCommand(
     position: { x: nx, y: ny },
     velocity: vel,
     heading: newHeading,
+    gunHeading: newGunHeading,
     gunHeat: newGunHeat,
-    energy: wallEvent ? bot.energy - wallEvent.damage : bot.energy,
+    energy: bot.energy,
   };
 
   return { next, event: wallEvent };
@@ -82,7 +84,7 @@ export function createBullet(
     id: bulletId,
     ownerId: bot.id,
     position: { ...bot.position },
-    heading: bot.heading,
+    heading: bot.gunHeading,
   };
   const updatedBot: BotState = {
     ...bot,
