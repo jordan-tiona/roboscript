@@ -1,0 +1,10 @@
+{
+  "name": "roboscript",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter client dev",
+    "build": "pnpm --filter engine build && pnpm --filter client build",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "engines": { "node": ">=24", "pnpm": ">=10" }
+}
