@@ -99,6 +99,12 @@ export class GameDriver {
         .map((p) => p.targetId),
     );
 
+    // Bots that fired this tick (visible muzzle flash)
+    const firedThisTick = new Set<string>();
+    for (const e of this.state.events) {
+      if (e.type === "bulletFired") firedThisTick.add(e.botId);
+    }
+
     return this.state.bots
       .filter((b) => b.id !== observerId)
       .map((b): EnemyView => {
@@ -128,6 +134,7 @@ export class GameDriver {
           heading: lk?.heading ?? 0,
           energy: lk?.energy ?? 0,
           velocity: lk?.velocity ?? 0,
+          firedThisTick: isVisible && firedThisTick.has(b.id),
         };
       });
   }

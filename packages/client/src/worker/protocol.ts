@@ -31,6 +31,9 @@ export interface BotStateView {
 // Always present for every non-self bot. When visible: false, position/heading/
 // energy/velocity reflect the last known state. Check lastSeen before relying
 // on stale data; null means this enemy has never been observed.
+//
+// gunHeading is intentionally absent — you can't tell where an enemy is aiming
+// just by looking. firedThisTick is exposed because a muzzle flash is obvious.
 
 export interface EnemyView {
   readonly id: string;
@@ -43,4 +46,5 @@ export interface EnemyView {
   readonly heading: number;
   readonly energy: number;
   readonly velocity: number;
+  readonly firedThisTick: boolean;   // true only when this enemy is visible and fired this tick
 }

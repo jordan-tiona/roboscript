@@ -61,7 +61,8 @@ export type GameEvent =
   | HitWallEvent
   | BulletHitEvent
   | BotDeathEvent
-  | BulletMissedEvent;
+  | BulletMissedEvent
+  | BulletFiredEvent;
 
 export interface HitByBulletEvent {
   readonly type: "hitByBullet";
@@ -95,4 +96,10 @@ export interface BulletMissedEvent {
   readonly type: "bulletMissed";
   readonly bulletId: string;
   readonly ownerId: string;
+}
+
+export interface BulletFiredEvent {
+  readonly type: "bulletFired";
+  readonly botId: string;
+  readonly bulletId: string;
 }

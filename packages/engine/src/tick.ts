@@ -31,8 +31,10 @@ export function tick(state: GameState, commands: readonly BotCommand[]): GameSta
   bots = bots.map((bot) => {
     const cmd = cmdMap.get(bot.id);
     if (!cmd?.fire || bot.gunHeat > 0 || !bot.isAlive) return bot;
-    const { bullet, updatedBot } = createBullet(bot, `b${nextBulletId++}`);
+    const bulletId = `b${nextBulletId++}`;
+    const { bullet, updatedBot } = createBullet(bot, bulletId);
     newBullets.push(bullet);
+    events.push({ type: "bulletFired", botId: bot.id, bulletId });
     return updatedBot;
   });
 
