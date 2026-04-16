@@ -1,26 +1,20 @@
 export const TRACKER_BOT_NAME = "Tracker";
 
 export const TRACKER_BOT_CODE = `class MyRobot extends Robot {
-  constructor() {
-    super();
-    this._target = null;
-  }
-
   async run() {
     while (true) {
-      await this.turnRadar(45);
-      if (this._target) {
-        await this.turnGun(this._target.bearing);
-        await this.fire(2);
-        this._target = null;
-      }
-      await this.move(50);
-      await this.turn(-20);
-    }
-  }
+      const target = this.enemies.find(e => e.alive && e.visible)
+                  ?? this.enemies.find(e => e.alive && e.lastSeen !== null);
 
-  onScannedRobot(e) {
-    this._target = e;
-    this.fire(1);
+      if (target) {
+        await this.turnToward(target);
+        await this.fire();
+        await this.move(80);
+        await this.turn(20);
+      } else {
+        await this.turn(30);
+        await this.move(100);
+      }
+    }
   }
 }`;

@@ -28,7 +28,7 @@ return new MyRobot();`,
 
       runtime = factory(RobotRuntime) as RobotRuntime;
 
-      runtime._init(botId, (cmd) => {
+      runtime._init(botId, msg.botCount, (cmd) => {
         const reply: WorkerToMain = {
           type: "command",
           tickId: runtime!._currentTickId,
@@ -62,7 +62,7 @@ return new MyRobot();`,
   }
 
   if (msg.type === "tick" && runtime) {
-    runtime._receiveTick(msg.tickId, msg.state, msg.events);
+    runtime._receiveTick(msg.tickId, msg.state, msg.enemies, msg.events);
   }
 
   if (msg.type === "terminate") {

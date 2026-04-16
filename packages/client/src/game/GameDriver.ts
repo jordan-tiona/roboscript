@@ -1,6 +1,6 @@
 import { tick, buildInitialState } from "@roboscript/engine";
 import type { GameState, BotCommand } from "@roboscript/engine";
-import type { MainToWorker, WorkerToMain } from "../worker/protocol.js";
+import type { MainToWorker, WorkerToMain, EnemyView } from "../worker/protocol.js";
 
 const TICK_DEADLINE_MS = 50;  // max ms to wait for a bot command per tick
 const MAX_STALL_TICKS = 30;   // consecutive stalls before bot is terminated
@@ -11,12 +11,23 @@ export interface BotEntry {
   code: string;
 }
 
+interface LastKnownEntry {
+  x: number;
+  y: number;
+  heading: number;
+  energy: number;
+  velocity: number;
+  tick: number;
+}
+
 export class GameDriver {
   private state: GameState;
   private workers = new Map<string, Worker>();
   private stallCounts = new Map<string, number>();
   private pendingCommands = new Map<string, BotCommand>();
   private tickResolvers = new Map<string, (cmd: BotCommand | null) => void>();
+  // lastKnown[observerId][targetId] = last observed state
+  private lastKnown = new Map<string, Map<string, LastKnownEntry>>();
 
   constructor(bots: BotEntry[]) {
     this.state = buildInitialState(bots.map((b) => ({ id: b.id, name: b.name })));
@@ -32,13 +43,13 @@ export class GameDriver {
       );
       this.workers.set(bot.id, worker);
       this.stallCounts.set(bot.id, 0);
+      this.lastKnown.set(bot.id, new Map());
 
       const readyPromise = new Promise<void>((resolve) => {
         worker.onmessage = (evt: MessageEvent<WorkerToMain>) => {
           const msg = evt.data;
 
           if (msg.type === "ready") {
-            // Switch to the live message handler after ready
             worker.onmessage = (e: MessageEvent<WorkerToMain>) =>
               this.handleWorkerMessage(e.data);
             resolve();
@@ -46,7 +57,7 @@ export class GameDriver {
           }
           if (msg.type === "error") {
             console.error(`[${msg.botId}] init error:`, msg.message);
-            resolve(); // still resolve so the game can start
+            resolve();
           }
         };
       });
@@ -57,6 +68,7 @@ export class GameDriver {
         type: "init",
         botId: bot.id,
         botName: bot.name,
+        botCount: bots.length,
         code: bot.code,
       };
       worker.postMessage(initMsg);
@@ -79,6 +91,47 @@ export class GameDriver {
     }
   }
 
+  private buildEnemyViews(observerId: string): EnemyView[] {
+    const known = this.lastKnown.get(observerId) ?? new Map<string, LastKnownEntry>();
+    const visibleTargets = new Set(
+      this.state.visibility
+        .filter((p) => p.observerId === observerId)
+        .map((p) => p.targetId),
+    );
+
+    return this.state.bots
+      .filter((b) => b.id !== observerId)
+      .map((b): EnemyView => {
+        const isVisible = visibleTargets.has(b.id);
+
+        if (isVisible) {
+          // Update last known
+          known.set(b.id, {
+            x: b.position.x,
+            y: b.position.y,
+            heading: b.heading,
+            energy: b.energy,
+            velocity: b.velocity,
+            tick: this.state.tick,
+          });
+        }
+
+        const lk = known.get(b.id);
+        return {
+          id: b.id,
+          name: b.name,
+          alive: b.isAlive,
+          visible: isVisible,
+          lastSeen: lk ? this.state.tick - lk.tick : null,
+          x: lk?.x ?? 0,
+          y: lk?.y ?? 0,
+          heading: lk?.heading ?? 0,
+          energy: lk?.energy ?? 0,
+          velocity: lk?.velocity ?? 0,
+        };
+      });
+  }
+
   async runTick(onState: (s: GameState) => void): Promise<void> {
     const tickId = this.state.tick;
     const commandPromises: Promise<void>[] = [];
@@ -88,9 +141,7 @@ export class GameDriver {
       const worker = this.workers.get(bot.id);
       if (!worker) continue;
 
-      // Filter events to only those relevant to this bot
       const botEvents = this.state.events.filter((e) => {
-        if (e.type === "scannedRobot") return e.sourceId === bot.id;
         if (e.type === "hitByBullet") return e.victimId === bot.id;
         if (e.type === "hitWall") return e.botId === bot.id;
         if (e.type === "bulletHit") return e.ownerId === bot.id;
@@ -106,12 +157,11 @@ export class GameDriver {
           x: bot.position.x,
           y: bot.position.y,
           heading: bot.heading,
-          gunHeading: bot.gunHeading,
-          radarHeading: bot.radarHeading,
           energy: bot.energy,
           velocity: bot.velocity,
           gunHeat: bot.gunHeat,
         },
+        enemies: this.buildEnemyViews(bot.id),
         events: botEvents,
       };
       worker.postMessage(tickMsg);

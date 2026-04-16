@@ -16,14 +16,13 @@ import {
   ACCELERATION,
   DECELERATION,
   MAX_TURN_RATE,
-  MAX_GUN_TURN_RATE,
-  MAX_RADAR_TURN_RATE,
   GUN_COOLING_RATE,
-  BULLET_DAMAGE_BASE,
-  BULLET_DAMAGE_BONUS,
+  GUN_HEAT_PER_SHOT,
+  BULLET_DAMAGE,
   BULLET_HIT_ENERGY_BONUS,
   WALL_DAMAGE_FACTOR,
   BULLET_SPEED,
+  MAX_ENERGY,
 } from "./constants.js";
 import { headingToVec, clamp, normalizeAngle, distanceSq } from "./util.js";
 
@@ -36,12 +35,7 @@ export function applyBotCommand(
   if (!bot.isAlive) return { next: bot, event: null };
 
   const dBody = clamp(cmd?.turnDegrees ?? 0, -MAX_TURN_RATE, MAX_TURN_RATE);
-  const dGun = clamp(cmd?.turnGunDegrees ?? 0, -MAX_GUN_TURN_RATE, MAX_GUN_TURN_RATE);
-  const dRadar = clamp(cmd?.turnRadarDegrees ?? 0, -MAX_RADAR_TURN_RATE, MAX_RADAR_TURN_RATE);
-
   const newHeading = normalizeAngle(bot.heading + dBody);
-  const newGunHeading = normalizeAngle(bot.gunHeading + dBody + dGun);
-  const newRadarHeading = normalizeAngle(bot.radarHeading + dBody + dGun + dRadar);
 
   // Velocity with acceleration/deceleration limits
   const desired = clamp(cmd?.desiredVelocity ?? bot.velocity, -MAX_SPEED, MAX_SPEED);
@@ -71,8 +65,6 @@ export function applyBotCommand(
     position: { x: nx, y: ny },
     velocity: vel,
     heading: newHeading,
-    gunHeading: newGunHeading,
-    radarHeading: newRadarHeading,
     gunHeat: newGunHeat,
     energy: wallEvent ? bot.energy - wallEvent.damage : bot.energy,
   };
@@ -84,21 +76,17 @@ export function applyBotCommand(
 
 export function createBullet(
   bot: BotState,
-  power: number,
   bulletId: string,
 ): { bullet: BulletState; updatedBot: BotState } {
-  const clampedPower = clamp(power, 0.1, 3.0);
   const bullet: BulletState = {
     id: bulletId,
     ownerId: bot.id,
     position: { ...bot.position },
-    heading: bot.gunHeading,
-    power: clampedPower,
+    heading: bot.heading,
   };
   const updatedBot: BotState = {
     ...bot,
-    gunHeat: bot.gunHeat + clampedPower,
-    energy: bot.energy - clampedPower,
+    gunHeat: bot.gunHeat + GUN_HEAT_PER_SHOT,
   };
   return { bullet, updatedBot };
 }
@@ -117,7 +105,6 @@ export function advanceBullets(
 } {
   const events: Array<HitByBulletEvent | BulletHitEvent | BulletMissedEvent> = [];
   const remaining: BulletState[] = [];
-  // Collect energy deltas cleanly to avoid nested mutation
   const energyDeltas = new Map<string, number>();
 
   for (const bullet of bullets) {
@@ -139,15 +126,10 @@ export function advanceBullets(
       if (distanceSq(movedBullet.position, bot.position) > minDist * minDist) continue;
 
       hit = true;
-      const damage =
-        BULLET_DAMAGE_BASE * bullet.power +
-        (bullet.power > 1 ? BULLET_DAMAGE_BONUS * (bullet.power - 1) : 0);
-      const energyBonus = BULLET_HIT_ENERGY_BONUS * bullet.power;
-
-      energyDeltas.set(bot.id, (energyDeltas.get(bot.id) ?? 0) - damage);
+      energyDeltas.set(bot.id, (energyDeltas.get(bot.id) ?? 0) - BULLET_DAMAGE);
       energyDeltas.set(
         bullet.ownerId,
-        (energyDeltas.get(bullet.ownerId) ?? 0) + energyBonus,
+        (energyDeltas.get(bullet.ownerId) ?? 0) + BULLET_HIT_ENERGY_BONUS,
       );
 
       events.push({
@@ -156,14 +138,14 @@ export function advanceBullets(
         bulletId: bullet.id,
         ownerId: bullet.ownerId,
         bearing: 0, // caller computes bearing if needed
-        damage,
+        damage: BULLET_DAMAGE,
       });
       events.push({
         type: "bulletHit",
         ownerId: bullet.ownerId,
         bulletId: bullet.id,
         victimId: bot.id,
-        energyBonus,
+        energyBonus: BULLET_HIT_ENERGY_BONUS,
       });
       break; // bullet hits at most one bot
     }
@@ -173,7 +155,8 @@ export function advanceBullets(
 
   const updatedBots = bots.map((bot) => {
     const delta = energyDeltas.get(bot.id);
-    return delta !== undefined ? { ...bot, energy: bot.energy + delta } : bot;
+    if (delta === undefined) return bot;
+    return { ...bot, energy: Math.min(MAX_ENERGY, bot.energy + delta) };
   });
 
   return { remaining, events, updatedBots };

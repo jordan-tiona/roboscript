@@ -13,8 +13,6 @@ export interface BotState {
   readonly position: Vec2;
   readonly velocity: number;      // scalar; direction is always heading
   readonly heading: number;       // degrees, 0 = north, clockwise
-  readonly gunHeading: number;    // absolute degrees
-  readonly radarHeading: number;  // absolute degrees
   readonly energy: number;
   readonly gunHeat: number;
   readonly isAlive: boolean;
@@ -25,7 +23,11 @@ export interface BulletState {
   readonly ownerId: string;
   readonly position: Vec2;
   readonly heading: number;
-  readonly power: number; // 0.1 – 3.0
+}
+
+export interface VisibilityPair {
+  readonly observerId: string;
+  readonly targetId: string;
 }
 
 export interface GameState {
@@ -33,6 +35,7 @@ export interface GameState {
   readonly bots: readonly BotState[];
   readonly bullets: readonly BulletState[];
   readonly events: readonly GameEvent[];
+  readonly visibility: readonly VisibilityPair[];
   readonly isOver: boolean;
   readonly winnerId: string | null;
   readonly nextBulletId: number;
@@ -41,37 +44,22 @@ export interface GameState {
 // ─── Commands ─────────────────────────────────────────────────────────────────
 //
 // Struct-of-intent: all fields optional. Engine clamps to max rates.
-// Multiple fields may be set in one tick (e.g. turn body while also turning gun).
 
 export interface BotCommand {
   readonly botId: string;
   readonly desiredVelocity?: number;   // units/tick; engine applies accel/decel limits
   readonly turnDegrees?: number;       // body rotation (signed, clamped to MAX_TURN_RATE)
-  readonly turnGunDegrees?: number;    // gun rotation relative to body
-  readonly turnRadarDegrees?: number;  // radar rotation relative to gun
-  readonly firePower?: number;         // 0.1–3.0; ignored if gun heat > 0
+  readonly fire?: boolean;             // fire a bullet this tick (ignored if gun heat > 0)
 }
 
 // ─── Events ───────────────────────────────────────────────────────────────────
 
 export type GameEvent =
-  | ScannedRobotEvent
   | HitByBulletEvent
   | HitWallEvent
   | BulletHitEvent
   | BotDeathEvent
   | BulletMissedEvent;
-
-export interface ScannedRobotEvent {
-  readonly type: "scannedRobot";
-  readonly sourceId: string;
-  readonly scannedId: string;
-  readonly bearing: number;   // degrees relative to scanning bot's heading
-  readonly distance: number;
-  readonly energy: number;
-  readonly heading: number;
-  readonly velocity: number;
-}
 
 export interface HitByBulletEvent {
   readonly type: "hitByBullet";

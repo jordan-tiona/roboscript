@@ -6,7 +6,7 @@ import {
   advanceBullets,
   resolveBotCollisions,
 } from "./physics.js";
-import { computeRadarScans } from "./radar.js";
+import { computeVisibility } from "./visibility.js";
 
 /**
  * Pure tick function — zero side effects, zero I/O, runs in any JS environment.
@@ -17,11 +17,6 @@ export function tick(state: GameState, commands: readonly BotCommand[]): GameSta
 
   const cmdMap = new Map<string, BotCommand>(commands.map((c) => [c.botId, c]));
   const events: GameEvent[] = [];
-
-  // Snapshot radar headings before movement (used to compute sweep arc)
-  const prevRadarHeadings = new Map<string, number>(
-    state.bots.map((b) => [b.id, b.radarHeading]),
-  );
 
   // 1. Movement, rotation, wall collision
   let bots: BotState[] = state.bots.map((bot) => {
@@ -35,8 +30,8 @@ export function tick(state: GameState, commands: readonly BotCommand[]): GameSta
   const newBullets: import("./types.js").BulletState[] = [];
   bots = bots.map((bot) => {
     const cmd = cmdMap.get(bot.id);
-    if (!cmd?.firePower || bot.gunHeat > 0 || !bot.isAlive) return bot;
-    const { bullet, updatedBot } = createBullet(bot, cmd.firePower, `b${nextBulletId++}`);
+    if (!cmd?.fire || bot.gunHeat > 0 || !bot.isAlive) return bot;
+    const { bullet, updatedBot } = createBullet(bot, `b${nextBulletId++}`);
     newBullets.push(bullet);
     return updatedBot;
   });
@@ -64,12 +59,8 @@ export function tick(state: GameState, commands: readonly BotCommand[]): GameSta
     return bot;
   });
 
-  // 6. Radar scans (after movement so updated positions are used)
-  for (const bot of bots) {
-    if (!bot.isAlive) continue;
-    const prev = prevRadarHeadings.get(bot.id) ?? bot.radarHeading;
-    events.push(...computeRadarScans(bot, prev, bots));
-  }
+  // 6. Compute visibility (after movement so updated positions are used)
+  const visibility = computeVisibility(bots);
 
   // 7. Win condition
   const alive = bots.filter((b) => b.isAlive);
@@ -81,6 +72,7 @@ export function tick(state: GameState, commands: readonly BotCommand[]): GameSta
     bots,
     bullets: remaining,
     events,
+    visibility,
     isOver,
     winnerId,
     nextBulletId,
@@ -107,8 +99,6 @@ export function buildInitialState(
     position: startPositions[i % startPositions.length] ?? { x: 400, y: 300 },
     velocity: 0,
     heading: (i * 90) % 360,
-    gunHeading: (i * 90) % 360,
-    radarHeading: (i * 90) % 360,
     energy: MAX_ENERGY,
     gunHeat: 3,
     isAlive: true,
@@ -119,6 +109,7 @@ export function buildInitialState(
     bots,
     bullets: [],
     events: [],
+    visibility: computeVisibility(bots),
     isOver: false,
     winnerId: null,
     nextBulletId: 0,

@@ -3,14 +3,15 @@ export const DEFAULT_BOT_NAME = "MyRobot";
 export const DEFAULT_BOT_CODE = `class MyRobot extends Robot {
   async run() {
     while (true) {
-      await this.turn(15);
-      await this.move(100);
-      await this.turnGun(360);
+      const target = this.enemies.find(e => e.visible && e.alive);
+      if (target) {
+        await this.turnToward(target);
+        await this.fire();
+      } else {
+        await this.turn(20);
+        await this.move(100);
+      }
     }
-  }
-
-  onScannedRobot(e) {
-    this.fire(Math.min(3, e.energy / 10));
   }
 
   onHitWall() {

@@ -48,19 +48,6 @@ export function renderFrame(
     ctx.translate(x, y);
 
     if (bot.isAlive) {
-      // Radar arc
-      const radarRad = (bot.radarHeading * Math.PI) / 180 - Math.PI / 2;
-      const halfArc = (22.5 * Math.PI) / 180;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.arc(0, 0, 90, radarRad - halfArc, radarRad + halfArc);
-      ctx.closePath();
-      ctx.fillStyle = `${color}18`;
-      ctx.fill();
-      ctx.strokeStyle = `${color}40`;
-      ctx.lineWidth = 1;
-      ctx.stroke();
-
       // Body
       ctx.beginPath();
       ctx.arc(0, 0, BOT_RADIUS, 0, Math.PI * 2);
@@ -80,7 +67,7 @@ export function renderFrame(
 
       // Gun barrel
       ctx.save();
-      ctx.rotate((bot.gunHeading * Math.PI) / 180);
+      ctx.rotate((bot.heading * Math.PI) / 180);
       ctx.fillStyle = "#ddd";
       ctx.strokeStyle = "#000";
       ctx.lineWidth = 1;
