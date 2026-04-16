@@ -5,53 +5,14 @@ import type { ArenaHandle } from "./ui/Arena.js";
 import { Controls } from "./ui/Controls.js";
 import { GameLoop } from "./game/GameLoop.js";
 import type { BotEntry } from "./game/GameDriver.js";
+import { BUILT_IN_BOTS } from "./bots/index.js";
+import { DEFAULT_BOT_CODE } from "./bots/default.js";
 
-const DEFAULT_BOT = `class MyRobot extends Robot {
-  async run() {
-    while (true) {
-      await this.turn(15);
-      await this.move(100);
-      await this.turnGun(360);
-    }
-  }
 
-  onScannedRobot(e) {
-    this.fire(Math.min(3, e.energy / 10));
-  }
-
-  onHitWall() {
-    this.turn(45);
-  }
-}`;
-
-// A second bot that spins its radar and fires on sight
-const TRACKER_BOT = `class MyRobot extends Robot {
-  constructor() {
-    super();
-    this._target = null;
-  }
-
-  async run() {
-    while (true) {
-      await this.turnRadar(45);
-      if (this._target) {
-        await this.turnGun(this._target.bearing);
-        await this.fire(2);
-        this._target = null;
-      }
-      await this.move(50);
-      await this.turn(-20);
-    }
-  }
-
-  onScannedRobot(e) {
-    this._target = e;
-    this.fire(1);
-  }
-}`;
+const opponent = BUILT_IN_BOTS[0]!.entry;
 
 export function App() {
-  const [botACode, setBotACode] = useState(DEFAULT_BOT);
+  const [botACode, setBotACode] = useState(DEFAULT_BOT_CODE);
   const [running, setRunning] = useState(false);
   const arenaRef = useRef<ArenaHandle>(null);
   const loopRef = useRef<GameLoop | null>(null);
@@ -65,7 +26,7 @@ export function App() {
 
     bots.current = [
       { id: "bot-1", name: "MyRobot", code: botACode },
-      { id: "bot-2", name: "Tracker",  code: TRACKER_BOT },
+      opponent,
     ];
 
     const loop = new GameLoop(canvas, bots.current);
@@ -131,7 +92,7 @@ export function App() {
         </div>
         <Arena ref={arenaRef} />
         <div style={{ fontFamily: "monospace", fontSize: "11px", color: "#444" }}>
-          bot-2 uses a built-in Tracker opponent
+          opponent: {opponent.name}
         </div>
       </div>
     </div>
