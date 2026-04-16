@@ -226,6 +226,24 @@ export class RobotRuntime {
     return (Math.atan2(target.x - this._state.x, -(target.y - this._state.y)) * 180) / Math.PI;
   }
 
+  /**
+   * Relative bearing from the bot's body heading to the target, in degrees.
+   * Negative = target is to the left, positive = to the right. Range: (-180, 180].
+   * Use this to know how much to `turn()` to face a target.
+   */
+  bearingTo(target: { x: number; y: number }): number {
+    return ((this.angleTo(target) - this._state.heading + 540) % 360) - 180;
+  }
+
+  /**
+   * Relative bearing from the gun turret's heading to the target, in degrees.
+   * Negative = target is to the left, positive = to the right. Range: (-180, 180].
+   * Use this to know how much to `turnGun()` to aim at a target.
+   */
+  gunBearingTo(target: { x: number; y: number }): number {
+    return ((this.angleTo(target) - this._state.gunHeading + 540) % 360) - 180;
+  }
+
   // ── set* / execute() API ─────────────────────────────────────────────────
   //
   // An alternative to step() for users who prefer to build up a command across
