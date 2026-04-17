@@ -1,5 +1,11 @@
 import type { BotCommand, GameEvent } from "@roboscript/engine";
-import { bulletSpeed as engineBulletSpeed, DEFAULT_BULLET_POWER } from "@roboscript/engine";
+import {
+  bulletSpeed as engineBulletSpeed,
+  DEFAULT_BULLET_POWER,
+  MAX_SPEED,
+  MAX_TURN_RATE,
+  MAX_GUN_TURN_RATE,
+} from "@roboscript/engine";
 import type {
   HitByBulletEvent,
   HitWallEvent,
@@ -48,6 +54,7 @@ export class RobotRuntime {
   private _sendCommand!: CommandCallback;
   private _tickResolve: ((events: readonly GameEvent[]) => void) | null = null;
   private _started = false;
+  private _pendingFirstCommand: Omit<BotCommand, "botId"> | null = null;
 
   // Handler coroutine state
   private _activeHandlerCount = 0;
@@ -59,11 +66,12 @@ export class RobotRuntime {
   };
   private _enemies: EnemyView[] = [];
 
-  // Pending command built up by set* methods, flushed by execute()
+  // Pending state built up by set* methods, flushed by execute()
+  // remainingAhead/Turn/GunTurn persist across ticks until consumed
   private _pending: {
-    desiredVelocity?: number;
-    turnDegrees?: number;
-    turnGunDegrees?: number;
+    remainingAhead?: number;
+    remainingTurn?: number;
+    remainingGunTurn?: number;
     fire?: boolean;
     firePower?: number;
   } = {};
@@ -82,7 +90,9 @@ export class RobotRuntime {
   get x() { return this._state.x; }
   get y() { return this._state.y; }
   get heading() { return this._state.heading; }
+  get headingRadians() { return (this._state.heading * Math.PI) / 180; }
   get gunHeading() { return this._state.gunHeading; }
+  get gunHeadingRadians() { return (this._state.gunHeading * Math.PI) / 180; }
   get energy() { return this._state.energy; }
   get velocity() { return this._state.velocity; }
   get gunHeat() { return this._state.gunHeat; }
@@ -115,6 +125,14 @@ export class RobotRuntime {
     this._state = state;
     this._enemies = enemies;
     this._started = true;
+
+    // If a command was queued before the first tick, send it now as this tick's
+    // response and hold the coroutine until the next tick so it sees the result.
+    if (this._pendingFirstCommand) {
+      this._sendCommand({ ...this._pendingFirstCommand, botId: this._botId });
+      this._pendingFirstCommand = null;
+      return;
+    }
 
     // Update per-tick event state (Style A) — cleared every tick
     this.hitWall = null;
@@ -170,6 +188,8 @@ export class RobotRuntime {
   private _nextTick(command?: Omit<BotCommand, "botId">): Promise<readonly GameEvent[]> {
     if (command && this._started) {
       this._sendCommand({ ...command, botId: this._botId });
+    } else if (command && !this._started) {
+      this._pendingFirstCommand = command;
     }
     return new Promise<readonly GameEvent[]>((resolve) => {
       // Route to handler queue if a handler coroutine is active
@@ -237,6 +257,11 @@ export class RobotRuntime {
     return (Math.atan2(target.x - this._state.x, -(target.y - this._state.y)) * 180) / Math.PI;
   }
 
+  /** Same as `angleTo` but returns radians. */
+  angleToRadians(target: { x: number; y: number }): number {
+    return Math.atan2(target.x - this._state.x, -(target.y - this._state.y));
+  }
+
   /**
    * Relative bearing from the bot's body heading to the target, in degrees.
    * Negative = target is to the left, positive = to the right. Range: (-180, 180].
@@ -244,6 +269,11 @@ export class RobotRuntime {
    */
   bearingTo(target: { x: number; y: number }): number {
     return ((this.angleTo(target) - this._state.heading + 540) % 360) - 180;
+  }
+
+  /** Same as `bearingTo` but returns radians. Range: (-π, π]. */
+  bearingToRadians(target: { x: number; y: number }): number {
+    return (this.bearingTo(target) * Math.PI) / 180;
   }
 
   /**
@@ -255,29 +285,61 @@ export class RobotRuntime {
     return ((this.angleTo(target) - this._state.gunHeading + 540) % 360) - 180;
   }
 
+  /** Same as `gunBearingTo` but returns radians. Range: (-π, π]. */
+  gunBearingToRadians(target: { x: number; y: number }): number {
+    return (this.gunBearingTo(target) * Math.PI) / 180;
+  }
+
   // ── set* / execute() API ─────────────────────────────────────────────────
   //
   // An alternative to step() for users who prefer to build up a command across
-  // multiple lines before sending it. All set* calls are order-independent and
-  // accumulate into the same pending command. execute() flushes it as one tick.
+  // multiple lines before sending it. set* calls accumulate remaining distance/
+  // degrees; execute() consumes one tick's worth and keeps the remainder so
+  // motion continues across ticks without re-calling set*.
   //
-  // Example:
-  //   this.setAhead(8);
-  //   this.setTurn(10);
-  //   this.setTurnGun(-5);
-  //   await this.execute();  // all three happen simultaneously this tick
+  // Example — move and turn simultaneously over multiple ticks:
+  //   this.setAhead(100);
+  //   this.setTurn(90);
+  //   while (this.remainingAhead > 0 || this.remainingTurn > 0) {
+  //     await this.execute();
+  //   }
+  //
+  // Single-tick usage still works identically:
+  //   this.setAhead(8);   // consumed in one tick (≤ MAX_SPEED)
+  //   this.setTurn(10);   // consumed in one tick (≤ MAX_TURN_RATE)
+  //   await this.execute();
 
-  /** Queue forward movement at `speed` units/tick (clamped to max speed). */
-  setAhead(speed: number): void { this._pending.desiredVelocity =  Math.abs(speed); }
+  /** Set total forward distance to travel (spread across ticks by execute()). */
+  setAhead(distance: number): void { this._pending.remainingAhead =  Math.abs(distance); }
 
-  /** Queue backward movement at `speed` units/tick (clamped to max speed). */
-  setBack(speed: number): void  { this._pending.desiredVelocity = -Math.abs(speed); }
+  /** Set total backward distance to travel (spread across ticks by execute()). */
+  setBack(distance: number): void  { this._pending.remainingAhead = -Math.abs(distance); }
 
-  /** Queue a body rotation of `degrees` this tick (positive = clockwise). */
-  setTurn(degrees: number): void    { this._pending.turnDegrees    = degrees; }
+  /** Set total body rotation in degrees (positive = clockwise). */
+  setTurn(degrees: number): void        { this._pending.remainingTurn    =  degrees; }
+  /** Set total body rotation in radians (positive = clockwise). */
+  setTurnRadians(radians: number): void { this._pending.remainingTurn    =  (radians * 180) / Math.PI; }
+  /** Turn left (counter-clockwise) by `degrees`. */
+  setTurnLeft(degrees: number): void        { this._pending.remainingTurn    = -Math.abs(degrees); }
+  /** Turn left (counter-clockwise) by `radians`. */
+  setTurnLeftRadians(radians: number): void { this._pending.remainingTurn    = -(Math.abs(radians) * 180) / Math.PI; }
+  /** Turn right (clockwise) by `degrees`. */
+  setTurnRight(degrees: number): void        { this._pending.remainingTurn    =  Math.abs(degrees); }
+  /** Turn right (clockwise) by `radians`. */
+  setTurnRightRadians(radians: number): void { this._pending.remainingTurn    =  (Math.abs(radians) * 180) / Math.PI; }
 
-  /** Queue a gun rotation of `degrees` this tick (positive = clockwise). */
-  setTurnGun(degrees: number): void { this._pending.turnGunDegrees = degrees; }
+  /** Set total gun rotation in degrees (positive = clockwise). */
+  setTurnGun(degrees: number): void        { this._pending.remainingGunTurn =  degrees; }
+  /** Set total gun rotation in radians (positive = clockwise). */
+  setTurnGunRadians(radians: number): void { this._pending.remainingGunTurn =  (radians * 180) / Math.PI; }
+  /** Turn gun left (counter-clockwise) by `degrees`. */
+  setTurnGunLeft(degrees: number): void        { this._pending.remainingGunTurn = -Math.abs(degrees); }
+  /** Turn gun left (counter-clockwise) by `radians`. */
+  setTurnGunLeftRadians(radians: number): void { this._pending.remainingGunTurn = -(Math.abs(radians) * 180) / Math.PI; }
+  /** Turn gun right (clockwise) by `degrees`. */
+  setTurnGunRight(degrees: number): void        { this._pending.remainingGunTurn =  Math.abs(degrees); }
+  /** Turn gun right (clockwise) by `radians`. */
+  setTurnGunRightRadians(radians: number): void { this._pending.remainingGunTurn =  (Math.abs(radians) * 180) / Math.PI; }
 
   /** Queue a shot this tick at the given power (defaults to 1.0). Ignored if gun is cooling. */
   setFire(power: number = DEFAULT_BULLET_POWER): void {
@@ -285,19 +347,55 @@ export class RobotRuntime {
     this._pending.firePower = power;
   }
 
+  /** Remaining forward/backward distance from the last setAhead/setBack call. */
+  get remainingAhead(): number { return this._pending.remainingAhead ?? 0; }
+  /** Remaining rotation from the last setTurn call. */
+  get remainingTurn(): number  { return this._pending.remainingTurn  ?? 0; }
+  /** Remaining rotation from the last setTurnGun call. */
+  get remainingGunTurn(): number { return this._pending.remainingGunTurn ?? 0; }
+
   /**
-   * Send all queued set* actions as a single tick command, then wait one tick.
-   * The pending queue is cleared after each call.
+   * Advance one tick, consuming up to one tick's worth of the remaining
+   * set* distances/degrees. Remainder persists automatically so you can loop:
+   *   while (this.remainingAhead > 0) await this.execute();
+   *
+   * Fire (setFire) is always one-shot and cleared after each call.
    */
   async execute(): Promise<void> {
-    await this._nextTick({
-      ...(this._pending.desiredVelocity !== undefined && { desiredVelocity: this._pending.desiredVelocity }),
-      ...(this._pending.turnDegrees     !== undefined && { turnDegrees:     this._pending.turnDegrees }),
-      ...(this._pending.turnGunDegrees  !== undefined && { turnGunDegrees:  this._pending.turnGunDegrees }),
-      ...(this._pending.fire            !== undefined && { fire:            this._pending.fire }),
-      ...(this._pending.firePower       !== undefined && { firePower:       this._pending.firePower }),
-    });
-    this._pending = {};
+    const cmd: Omit<BotCommand, "botId"> = {};
+
+    if (this._pending.remainingAhead !== undefined) {
+      const rem = this._pending.remainingAhead;
+      const vel = Math.sign(rem) * Math.min(Math.abs(rem), MAX_SPEED);
+      cmd.desiredVelocity = vel;
+      const next = rem - vel;
+      this._pending.remainingAhead = Math.abs(next) < 0.5 ? undefined : next;
+    }
+
+    if (this._pending.remainingTurn !== undefined) {
+      const rem = this._pending.remainingTurn;
+      const turn = Math.sign(rem) * Math.min(Math.abs(rem), MAX_TURN_RATE);
+      cmd.turnDegrees = turn;
+      const next = rem - turn;
+      this._pending.remainingTurn = Math.abs(next) < 0.1 ? undefined : next;
+    }
+
+    if (this._pending.remainingGunTurn !== undefined) {
+      const rem = this._pending.remainingGunTurn;
+      const turn = Math.sign(rem) * Math.min(Math.abs(rem), MAX_GUN_TURN_RATE);
+      cmd.turnGunDegrees = turn;
+      const next = rem - turn;
+      this._pending.remainingGunTurn = Math.abs(next) < 0.1 ? undefined : next;
+    }
+
+    if (this._pending.fire) {
+      cmd.fire = true;
+      if (this._pending.firePower !== undefined) cmd.firePower = this._pending.firePower;
+      this._pending.fire = undefined;
+      this._pending.firePower = undefined;
+    }
+
+    await this._nextTick(cmd);
   }
 
   /** Move forward `distance` units over multiple ticks, then stop fully. */
