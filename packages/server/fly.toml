@@ -1,0 +1,25 @@
+app = "roboscript-server"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+  # Build context must be the repo root so the Dockerfile can reach the workspace
+  build_context = "../.."
+
+[env]
+  PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 25
+    soft_limit = 20
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

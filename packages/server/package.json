@@ -1,0 +1,28 @@
+{
+  "name": "@roboscript/server",
+  "version": "0.1.0",
+  "type": "module",
+  "files": ["dist"],
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.0",
+    "better-auth": "^1.0.0",
+    "dotenv": "^16.0.0",
+    "drizzle-orm": "^0.45.0",
+    "hono": "^4.6.0",
+    "postgres": "^3.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "drizzle-kit": "^0.31.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.5.0"
+  }
+}
