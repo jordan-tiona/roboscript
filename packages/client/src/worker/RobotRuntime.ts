@@ -92,10 +92,11 @@ export class RobotRuntime {
   get botCount(): number { return this._botCount; }
 
   // ── Internal init ─────────────────────────────────────────────────────────
-  _init(botId: string, botCount: number, sendCommand: CommandCallback): void {
+  _init(botId: string, botCount: number, sendCommand: CommandCallback, initialState: BotStateView): void {
     this._botId = botId;
     this._botCount = botCount;
     this._sendCommand = sendCommand;
+    this._state = initialState;
   }
 
   // ── Called by botWorker on each tick message ───────────────────────────────

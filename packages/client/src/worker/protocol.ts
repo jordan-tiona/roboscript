@@ -3,7 +3,7 @@ import type { BotCommand, GameEvent } from "@roboscript/engine";
 // ─── Main thread → Worker ─────────────────────────────────────────────────────
 
 export type MainToWorker =
-  | { type: "init"; botId: string; botName: string; botCount: number; code: string }
+  | { type: "init"; botId: string; botName: string; botCount: number; code: string; initialState: BotStateView }
   | { type: "tick"; tickId: number; state: BotStateView; enemies: EnemyView[]; events: GameEvent[] }
   | { type: "terminate" };
 

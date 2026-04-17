@@ -64,12 +64,22 @@ export class GameDriver {
 
       worker.onerror = (e) => console.error(`Worker error for ${bot.id}:`, e);
 
+      const botState = this.state.bots.find((b) => b.id === bot.id)!;
       const initMsg: MainToWorker = {
         type: "init",
         botId: bot.id,
         botName: bot.name,
         botCount: bots.length,
         code: bot.code,
+        initialState: {
+          x: botState.position.x,
+          y: botState.position.y,
+          heading: botState.heading,
+          gunHeading: botState.gunHeading,
+          energy: botState.energy,
+          velocity: botState.velocity,
+          gunHeat: botState.gunHeat,
+        },
       };
       worker.postMessage(initMsg);
       readyPromises.push(readyPromise);

@@ -36,7 +36,7 @@ return new MyRobot();`,
           command: cmd,
         };
         workerSelf.postMessage(reply);
-      });
+      }, msg.initialState);
 
       const ready: WorkerToMain = { type: "ready", botId };
       workerSelf.postMessage(ready);

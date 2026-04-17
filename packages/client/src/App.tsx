@@ -7,7 +7,7 @@ import { BotSelector } from "./ui/BotSelector.js";
 import { GameLoop } from "./game/GameLoop.js";
 import type { BotEntry } from "./game/GameDriver.js";
 import { BUILT_IN_BOTS } from "./bots/index.js";
-import { DEFAULT_BOT_CODE } from "./bots/default.js";
+import DEFAULT_BOT_CODE from "./bots/code/default.js?raw";
 
 const ALL_BOT_IDS = new Set(BUILT_IN_BOTS.map((b) => b.id));
 
