@@ -2,7 +2,7 @@ import { ARENA_WIDTH, ARENA_HEIGHT } from "@roboscript/engine";
 import { CANVAS_PADDING } from "./renderer.js";
 import type { GameState } from "@roboscript/engine";
 import { GameDriver } from "./GameDriver.js";
-import type { BotEntry } from "./GameDriver.js";
+import type { BotEntry, LogCallback } from "./GameDriver.js";
 import { renderFrame } from "./renderer.js";
 import { TICKS_PER_SECOND } from "@roboscript/engine";
 
@@ -17,9 +17,9 @@ export class GameLoop {
   private onGameOver: (() => void) | null = null;
   private countdown: number | null = null;
 
-  constructor(canvas: HTMLCanvasElement, bots: BotEntry[], onGameOver?: () => void) {
+  constructor(canvas: HTMLCanvasElement, bots: BotEntry[], onGameOver?: () => void, onLog?: LogCallback) {
     this.onGameOver = onGameOver ?? null;
-    this.driver = new GameDriver(bots);
+    this.driver = new GameDriver(bots, onLog);
     this.canvas = canvas;
     this.canvas.width = ARENA_WIDTH + CANVAS_PADDING * 2;
     this.canvas.height = ARENA_HEIGHT + CANVAS_PADDING * 2;

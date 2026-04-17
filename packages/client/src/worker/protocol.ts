@@ -12,6 +12,7 @@ export type MainToWorker =
 export type WorkerToMain =
   | { type: "ready"; botId: string }
   | { type: "command"; tickId: number; botId: string; command: BotCommand }
+  | { type: "log"; botId: string; message: string; tick: number }
   | { type: "error"; botId: string; message: string };
 
 // ─── What user bot code can read about its own state ─────────────────────────

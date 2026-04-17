@@ -7,12 +7,22 @@ import { RobotRuntime } from "./RobotRuntime.js";
 const workerSelf = self as any;
 
 let runtime: RobotRuntime | null = null;
+let currentTick = 0;
 
 workerSelf.onmessage = (evt: MessageEvent<MainToWorker>) => {
   const msg = evt.data;
 
   if (msg.type === "init") {
     const botId = msg.botId;
+
+    // Redirect console.log from bot code to the main thread
+    console.log = (...args: unknown[]) => {
+      const message = args.map((a) =>
+        a !== null && typeof a === "object" ? JSON.stringify(a) : String(a)
+      ).join(" ");
+      workerSelf.postMessage({ type: "log", botId, message, tick: currentTick } satisfies WorkerToMain);
+    };
+
     try {
       // Sandboxed eval: Robot is injected as a parameter so user code cannot
       // reach the real module. The user's class must be named MyRobot.
@@ -62,6 +72,7 @@ return new MyRobot();`,
   }
 
   if (msg.type === "tick" && runtime) {
+    currentTick = msg.tickId;
     runtime._receiveTick(msg.tickId, msg.state, msg.enemies, msg.events);
   }
 

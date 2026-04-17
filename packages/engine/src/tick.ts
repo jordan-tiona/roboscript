@@ -32,7 +32,7 @@ export function tick(state: GameState, commands: readonly BotCommand[]): GameSta
     const cmd = cmdMap.get(bot.id);
     if (!cmd?.fire || bot.gunHeat > 0 || !bot.isAlive) return bot;
     const bulletId = `b${nextBulletId++}`;
-    const { bullet, updatedBot } = createBullet(bot, bulletId);
+    const { bullet, updatedBot } = createBullet(bot, bulletId, cmd.firePower);
     newBullets.push(bullet);
     events.push({ type: "bulletFired", botId: bot.id, bulletId });
     return updatedBot;
@@ -50,7 +50,9 @@ export function tick(state: GameState, commands: readonly BotCommand[]): GameSta
   events.push(...bulletEvents);
 
   // 4. Bot-bot collisions
-  bots = resolveBotCollisions(bots);
+  const { bots: collidedBots, events: collisionEvents } = resolveBotCollisions(bots);
+  bots = collidedBots;
+  events.push(...collisionEvents);
 
   // 5. Mark dead bots
   bots = bots.map((bot) => {

@@ -4,6 +4,7 @@ import type {
   BotCommand,
   HitWallEvent,
   HitByBulletEvent,
+  BotCollisionEvent,
   BulletHitEvent,
   BulletMissedEvent,
 } from "./types.js";
@@ -18,11 +19,12 @@ import {
   MAX_TURN_RATE,
   MAX_GUN_TURN_RATE,
   GUN_COOLING_RATE,
-  GUN_HEAT_PER_SHOT,
-  BULLET_DAMAGE,
-  BULLET_HIT_ENERGY_BONUS,
-  BULLET_SPEED,
-  MAX_ENERGY,
+  MIN_BULLET_POWER,
+  MAX_BULLET_POWER,
+  DEFAULT_BULLET_POWER,
+  bulletSpeed,
+  bulletDamage,
+  bulletGunHeat,
 } from "./constants.js";
 import { headingToVec, clamp, normalizeAngle, distanceSq } from "./util.js";
 
@@ -79,16 +81,19 @@ export function applyBotCommand(
 export function createBullet(
   bot: BotState,
   bulletId: string,
+  power: number = DEFAULT_BULLET_POWER,
 ): { bullet: BulletState; updatedBot: BotState } {
+  const clampedPower = Math.max(MIN_BULLET_POWER, Math.min(MAX_BULLET_POWER, power));
   const bullet: BulletState = {
     id: bulletId,
     ownerId: bot.id,
     position: { ...bot.position },
     heading: bot.gunHeading,
+    power: clampedPower,
   };
   const updatedBot: BotState = {
     ...bot,
-    gunHeat: bot.gunHeat + GUN_HEAT_PER_SHOT,
+    gunHeat: bot.gunHeat + bulletGunHeat(clampedPower),
   };
   return { bullet, updatedBot };
 }
@@ -111,8 +116,9 @@ export function advanceBullets(
 
   for (const bullet of bullets) {
     const dir = headingToVec(bullet.heading);
-    const nx = bullet.position.x + dir.x * BULLET_SPEED;
-    const ny = bullet.position.y + dir.y * BULLET_SPEED;
+    const speed = bulletSpeed(bullet.power);
+    const nx = bullet.position.x + dir.x * speed;
+    const ny = bullet.position.y + dir.y * speed;
 
     if (nx < 0 || nx > arenaW || ny < 0 || ny > arenaH) {
       events.push({ type: "bulletMissed", bulletId: bullet.id, ownerId: bullet.ownerId });
@@ -128,11 +134,8 @@ export function advanceBullets(
       if (distanceSq(movedBullet.position, bot.position) > minDist * minDist) continue;
 
       hit = true;
-      energyDeltas.set(bot.id, (energyDeltas.get(bot.id) ?? 0) - BULLET_DAMAGE);
-      energyDeltas.set(
-        bullet.ownerId,
-        (energyDeltas.get(bullet.ownerId) ?? 0) + BULLET_HIT_ENERGY_BONUS,
-      );
+      const damage = bulletDamage(bullet.power);
+      energyDeltas.set(bot.id, (energyDeltas.get(bot.id) ?? 0) - damage);
 
       events.push({
         type: "hitByBullet",
@@ -140,14 +143,13 @@ export function advanceBullets(
         bulletId: bullet.id,
         ownerId: bullet.ownerId,
         bearing: 0, // caller computes bearing if needed
-        damage: BULLET_DAMAGE,
+        damage,
       });
       events.push({
         type: "bulletHit",
         ownerId: bullet.ownerId,
         bulletId: bullet.id,
         victimId: bot.id,
-        energyBonus: BULLET_HIT_ENERGY_BONUS,
       });
       break; // bullet hits at most one bot
     }
@@ -158,7 +160,7 @@ export function advanceBullets(
   const updatedBots = bots.map((bot) => {
     const delta = energyDeltas.get(bot.id);
     if (delta === undefined) return bot;
-    return { ...bot, energy: Math.min(MAX_ENERGY, bot.energy + delta) };
+    return { ...bot, energy: bot.energy + delta };
   });
 
   return { remaining, events, updatedBots };
@@ -166,8 +168,13 @@ export function advanceBullets(
 
 // ─── Bot-bot collision ────────────────────────────────────────────────────────
 
-export function resolveBotCollisions(bots: BotState[]): BotState[] {
+export function resolveBotCollisions(bots: BotState[]): {
+  bots: BotState[];
+  events: BotCollisionEvent[];
+} {
   const result = [...bots];
+  const events: BotCollisionEvent[] = [];
+
   for (let i = 0; i < result.length; i++) {
     for (let j = i + 1; j < result.length; j++) {
       const a = result[i];
@@ -181,6 +188,10 @@ export function resolveBotCollisions(bots: BotState[]): BotState[] {
       const overlap = minDist - d;
       const ax = (a.position.x - b.position.x) / d;
       const ay = (a.position.y - b.position.y) / d;
+
+      const damageA = Math.abs(a.velocity) * 0.6;
+      const damageB = Math.abs(b.velocity) * 0.6;
+
       result[i] = {
         ...a,
         position: {
@@ -188,6 +199,7 @@ export function resolveBotCollisions(bots: BotState[]): BotState[] {
           y: clamp(a.position.y + (ay * overlap) / 2, BOT_RADIUS, ARENA_HEIGHT - BOT_RADIUS),
         },
         velocity: 0,
+        energy: a.energy - damageB,
       };
       result[j] = {
         ...b,
@@ -196,8 +208,13 @@ export function resolveBotCollisions(bots: BotState[]): BotState[] {
           y: clamp(b.position.y - (ay * overlap) / 2, BOT_RADIUS, ARENA_HEIGHT - BOT_RADIUS),
         },
         velocity: 0,
+        energy: b.energy - damageA,
       };
+
+      if (damageB > 0) events.push({ type: "botCollision", botId: a.id, otherId: b.id, damage: damageB });
+      if (damageA > 0) events.push({ type: "botCollision", botId: b.id, otherId: a.id, damage: damageA });
     }
   }
-  return result;
+
+  return { bots: result, events };
 }

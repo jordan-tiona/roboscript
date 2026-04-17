@@ -11,6 +11,8 @@ export interface BotEntry {
   code: string;
 }
 
+export type LogCallback = (botName: string, message: string, tick: number) => void;
+
 interface LastKnownEntry {
   x: number;
   y: number;
@@ -28,9 +30,11 @@ export class GameDriver {
   private tickResolvers = new Map<string, (cmd: BotCommand | null) => void>();
   // lastKnown[observerId][targetId] = last observed state
   private lastKnown = new Map<string, Map<string, LastKnownEntry>>();
+  private onLog: LogCallback | undefined;
 
-  constructor(bots: BotEntry[]) {
+  constructor(bots: BotEntry[], onLog?: LogCallback) {
     this.state = buildInitialState(bots.map((b) => ({ id: b.id, name: b.name })));
+    this.onLog = onLog;
   }
 
   start(bots: BotEntry[]): Promise<void> {
@@ -95,6 +99,10 @@ export class GameDriver {
         this.tickResolvers.delete(msg.botId);
         resolve(msg.command);
       }
+    }
+    if (msg.type === "log") {
+      const botName = this.state.bots.find((b) => b.id === msg.botId)?.name ?? msg.botId;
+      this.onLog?.(botName, msg.message, msg.tick);
     }
     if (msg.type === "error") {
       console.error(`[${msg.botId}] runtime error:`, msg.message);

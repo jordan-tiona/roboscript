@@ -1,7 +1,9 @@
 import type { BotCommand, GameEvent } from "@roboscript/engine";
+import { bulletSpeed as engineBulletSpeed, DEFAULT_BULLET_POWER } from "@roboscript/engine";
 import type {
   HitByBulletEvent,
   HitWallEvent,
+  BotCollisionEvent,
   BulletHitEvent,
 } from "@roboscript/engine";
 import type { BotStateView, EnemyView } from "./protocol.js";
@@ -63,6 +65,7 @@ export class RobotRuntime {
     turnDegrees?: number;
     turnGunDegrees?: number;
     fire?: boolean;
+    firePower?: number;
   } = {};
 
   // ── Per-tick event state (Style A) ────────────────────────────────────────
@@ -72,6 +75,8 @@ export class RobotRuntime {
   hitByBullet: HitByBulletEvent | null = null;
   /** Set if one of this bot's bullets hit an enemy this tick; null otherwise. */
   bulletHit: BulletHitEvent | null = null;
+  /** Set if this bot collided with another bot this tick; null otherwise. */
+  botCollision: BotCollisionEvent | null = null;
 
   // ── Readable state properties ─────────────────────────────────────────────
   get x() { return this._state.x; }
@@ -115,10 +120,12 @@ export class RobotRuntime {
     this.hitWall = null;
     this.hitByBullet = null;
     this.bulletHit = null;
+    this.botCollision = null;
     for (const e of events) {
       if (e.type === "hitWall") this.hitWall = e;
       else if (e.type === "hitByBullet") this.hitByBullet = e;
       else if (e.type === "bulletHit") this.bulletHit = e;
+      else if (e.type === "botCollision") this.botCollision = e;
     }
 
     // If handlers are mid-execution, give them this tick and hold main
@@ -133,9 +140,10 @@ export class RobotRuntime {
       for (const e of events) {
         let result: void | Promise<void>;
         this._activeHandlerCount++;
-        if (e.type === "hitByBullet") result = this.onHitByBullet(e);
-        else if (e.type === "hitWall")    result = this.onHitWall(e);
-        else if (e.type === "bulletHit")  result = this.onBulletHit(e);
+        if (e.type === "hitByBullet")    result = this.onHitByBullet(e);
+        else if (e.type === "hitWall")   result = this.onHitWall(e);
+        else if (e.type === "bulletHit") result = this.onBulletHit(e);
+        else if (e.type === "botCollision") result = this.onBotCollision(e);
         else if (e.type === "botDeath")   { this._activeHandlerCount--; this.onDeath(); continue; }
         else { this._activeHandlerCount--; continue; }
 
@@ -203,12 +211,14 @@ export class RobotRuntime {
     turn?: number;
     gunTurn?: number;
     fire?: boolean;
+    firePower?: number;
   } = {}): Promise<void> {
     await this._nextTick({
-      ...(actions.velocity !== undefined && { desiredVelocity: actions.velocity }),
-      ...(actions.turn     !== undefined && { turnDegrees:     actions.turn }),
-      ...(actions.gunTurn  !== undefined && { turnGunDegrees:  actions.gunTurn }),
-      ...(actions.fire     !== undefined && { fire:            actions.fire }),
+      ...(actions.velocity  !== undefined && { desiredVelocity: actions.velocity }),
+      ...(actions.turn      !== undefined && { turnDegrees:     actions.turn }),
+      ...(actions.gunTurn   !== undefined && { turnGunDegrees:  actions.gunTurn }),
+      ...(actions.fire      !== undefined && { fire:            actions.fire }),
+      ...(actions.firePower !== undefined && { firePower:       actions.firePower }),
     });
   }
 
@@ -269,8 +279,11 @@ export class RobotRuntime {
   /** Queue a gun rotation of `degrees` this tick (positive = clockwise). */
   setTurnGun(degrees: number): void { this._pending.turnGunDegrees = degrees; }
 
-  /** Queue a shot this tick (ignored if gun is still cooling down). */
-  setFire(): void { this._pending.fire = true; }
+  /** Queue a shot this tick at the given power (defaults to 1.0). Ignored if gun is cooling. */
+  setFire(power: number = DEFAULT_BULLET_POWER): void {
+    this._pending.fire = true;
+    this._pending.firePower = power;
+  }
 
   /**
    * Send all queued set* actions as a single tick command, then wait one tick.
@@ -282,6 +295,7 @@ export class RobotRuntime {
       ...(this._pending.turnDegrees     !== undefined && { turnDegrees:     this._pending.turnDegrees }),
       ...(this._pending.turnGunDegrees  !== undefined && { turnGunDegrees:  this._pending.turnGunDegrees }),
       ...(this._pending.fire            !== undefined && { fire:            this._pending.fire }),
+      ...(this._pending.firePower       !== undefined && { firePower:       this._pending.firePower }),
     });
     this._pending = {};
   }
@@ -363,9 +377,17 @@ export class RobotRuntime {
     }
   }
 
-  /** Fire a bullet. Does nothing if the gun is still cooling down. */
-  async fire(): Promise<void> {
-    await this._nextTick({ fire: true });
+  /** Fire a bullet at the given power (defaults to 1.0). Does nothing if the gun is cooling. */
+  async fire(power: number = DEFAULT_BULLET_POWER): Promise<void> {
+    await this._nextTick({ fire: true, firePower: power });
+  }
+
+  /**
+   * Returns the travel speed (units/tick) of a bullet fired at the given power.
+   * Use this when computing intercept angles so you don't hardcode the formula.
+   */
+  bulletSpeed(power: number = DEFAULT_BULLET_POWER): number {
+    return engineBulletSpeed(power);
   }
 
   // ── Event callbacks — Style B (override and optionally make async) ─────────
@@ -373,6 +395,7 @@ export class RobotRuntime {
   onHitByBullet(_e: HitByBulletEvent): void | Promise<void> {}
   onHitWall(_e: HitWallEvent): void | Promise<void> {}
   onBulletHit(_e: BulletHitEvent): void | Promise<void> {}
+  onBotCollision(_e: BotCollisionEvent): void | Promise<void> {}
   onDeath(): void {}
 
   // ── Entry point ───────────────────────────────────────────────────────────

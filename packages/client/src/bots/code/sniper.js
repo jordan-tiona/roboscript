@@ -43,17 +43,17 @@ class MyRobot extends Robot {
   }
 
   // Predict where `enemy` will be when a bullet fired now reaches it.
-  // Solves: distance(myPos, enemyPos + vel*t) = BULLET_SPEED * t
+  // Solves: distance(myPos, enemyPos + vel*t) = speed * t
   // Expanding gives a quadratic in t; we take the smallest positive root.
-  #predictPosition(enemy) {
-    const BULLET_SPEED = 15;
+  #predictPosition(enemy, power = 1.0) {
+    const speed = this.bulletSpeed(power);
     const rad = enemy.heading * Math.PI / 180;
     const vx = enemy.velocity * Math.sin(rad);
     const vy = -enemy.velocity * Math.cos(rad);
     const dx = enemy.x - this.x;
     const dy = enemy.y - this.y;
 
-    const a = vx * vx + vy * vy - BULLET_SPEED * BULLET_SPEED;
+    const a = vx * vx + vy * vy - speed * speed;
     const b = 2 * (dx * vx + dy * vy);
     const c = dx * dx + dy * dy;
 

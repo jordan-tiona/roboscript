@@ -24,6 +24,7 @@ export interface BulletState {
   readonly ownerId: string;
   readonly position: Vec2;
   readonly heading: number;
+  readonly power: number;
 }
 
 export interface VisibilityPair {
@@ -52,6 +53,7 @@ export interface BotCommand {
   readonly turnDegrees?: number;       // body rotation (signed, clamped to MAX_TURN_RATE)
   readonly turnGunDegrees?: number;    // gun rotation, independent of body
   readonly fire?: boolean;             // fire a bullet this tick (ignored if gun heat > 0)
+  readonly firePower?: number;         // bullet power (clamped to MIN/MAX_BULLET_POWER); defaults to DEFAULT_BULLET_POWER
 }
 
 // ─── Events ───────────────────────────────────────────────────────────────────
@@ -59,6 +61,7 @@ export interface BotCommand {
 export type GameEvent =
   | HitByBulletEvent
   | HitWallEvent
+  | BotCollisionEvent
   | BulletHitEvent
   | BotDeathEvent
   | BulletMissedEvent
@@ -79,12 +82,18 @@ export interface HitWallEvent {
   readonly damage: number;
 }
 
+export interface BotCollisionEvent {
+  readonly type: "botCollision";
+  readonly botId: string;
+  readonly otherId: string;
+  readonly damage: number;
+}
+
 export interface BulletHitEvent {
   readonly type: "bulletHit";
   readonly ownerId: string;
   readonly bulletId: string;
   readonly victimId: string;
-  readonly energyBonus: number;
 }
 
 export interface BotDeathEvent {

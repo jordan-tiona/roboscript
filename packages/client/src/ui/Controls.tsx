@@ -1,5 +1,6 @@
 interface Props {
   running: boolean;
+  canStart?: boolean;
   onStart: () => void;
   onStop: () => void;
   onReset: () => void;
@@ -16,7 +17,8 @@ const btn: React.CSSProperties = {
   fontSize: "13px",
 };
 
-export function Controls({ running, onStart, onStop, onReset }: Props) {
+export function Controls({ running, canStart = true, onStart, onStop, onReset }: Props) {
+  const startDisabled = !running && !canStart;
   return (
     <div
       style={{
@@ -28,7 +30,12 @@ export function Controls({ running, onStart, onStop, onReset }: Props) {
         alignItems: "center",
       }}
     >
-      <button style={btn} onClick={running ? onStop : onStart}>
+      <button
+        style={{ ...btn, opacity: startDisabled ? 0.4 : 1 }}
+        onClick={running ? onStop : onStart}
+        disabled={startDisabled}
+        title={startDisabled ? "Need at least 2 bots to start" : undefined}
+      >
         {running ? "■ Stop" : "▶ Start"}
       </button>
       <button style={{ ...btn, opacity: running ? 0.5 : 1 }} onClick={onReset} disabled={running}>
