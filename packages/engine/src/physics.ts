@@ -7,6 +7,7 @@ import type {
   BotCollisionEvent,
   BulletHitEvent,
   BulletMissedEvent,
+  Polygon,
 } from "./types.js";
 import {
   ARENA_WIDTH,
@@ -22,21 +23,80 @@ import {
   MIN_BULLET_POWER,
   MAX_BULLET_POWER,
   DEFAULT_BULLET_POWER,
+  SHIELD_MAX,
+  SHIELD_REGEN_DELAY,
+  SHIELD_REGEN_RATE,
   bulletSpeed,
   bulletDamage,
   bulletGunHeat,
 } from "./constants.js";
 import { headingToVec, clamp, normalizeAngle, distanceSq } from "./util.js";
 
+// ─── Polygon collision helpers ────────────────────────────────────────────────
+
+function pointInPolygon(px: number, py: number, poly: Polygon): boolean {
+  let inside = false;
+  const n = poly.length;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = poly[i]!.x, yi = poly[i]!.y;
+    const xj = poly[j]!.x, yj = poly[j]!.y;
+    if ((yi > py) !== (yj > py) && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+function distToSegmentSq(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax, dy = by - ay;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return (px - ax) ** 2 + (py - ay) ** 2;
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq));
+  return (px - (ax + t * dx)) ** 2 + (py - (ay + t * dy)) ** 2;
+}
+
+function circleIntersectsPolygon(cx: number, cy: number, r: number, poly: Polygon): boolean {
+  if (pointInPolygon(cx, cy, poly)) return true;
+  const r2 = r * r;
+  const n = poly.length;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    if (distToSegmentSq(cx, cy, poly[j]!.x, poly[j]!.y, poly[i]!.x, poly[i]!.y) < r2) return true;
+  }
+  return false;
+}
+
+function segmentsIntersect(
+  ax1: number, ay1: number, ax2: number, ay2: number,
+  bx1: number, by1: number, bx2: number, by2: number,
+): boolean {
+  const d1x = ax2 - ax1, d1y = ay2 - ay1;
+  const d2x = bx2 - bx1, d2y = by2 - by1;
+  const cross = d1x * d2y - d1y * d2x;
+  if (Math.abs(cross) < 1e-9) return false;
+  const t = ((bx1 - ax1) * d2y - (by1 - ay1) * d2x) / cross;
+  const u = ((bx1 - ax1) * d1y - (by1 - ay1) * d1x) / cross;
+  return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+}
+
+function bulletPathHitsPolygon(x1: number, y1: number, x2: number, y2: number, poly: Polygon): boolean {
+  if (pointInPolygon(x2, y2, poly)) return true;
+  const n = poly.length;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    if (segmentsIntersect(x1, y1, x2, y2, poly[j]!.x, poly[j]!.y, poly[i]!.x, poly[i]!.y)) return true;
+  }
+  return false;
+}
+
 // ─── Bot movement & rotation ──────────────────────────────────────────────────
 
 export function applyBotCommand(
   bot: BotState,
   cmd: BotCommand | undefined,
+  obstacles: readonly Polygon[],
 ): { next: BotState; event: HitWallEvent | null } {
   if (!bot.isAlive) return { next: bot, event: null };
 
-  const dBody = clamp(cmd?.turnDegrees ?? 0, -MAX_TURN_RATE, MAX_TURN_RATE);
+  const dBody = clamp(cmd?.turnDegrees    ?? 0, -MAX_TURN_RATE,     MAX_TURN_RATE);
   const dGun  = clamp(cmd?.turnGunDegrees ?? 0, -MAX_GUN_TURN_RATE, MAX_GUN_TURN_RATE);
   const newHeading    = normalizeAngle(bot.heading + dBody);
   const newGunHeading = normalizeAngle(bot.gunHeading + dGun);
@@ -59,6 +119,16 @@ export function applyBotCommand(
     vel = 0;
     nx = xClamped;
     ny = yClamped;
+  }
+
+  // Obstacle collision — revert to pre-move position on overlap
+  for (const obs of obstacles) {
+    if (circleIntersectsPolygon(nx, ny, BOT_RADIUS, obs)) {
+      vel = 0;
+      nx = bot.position.x;
+      ny = bot.position.y;
+      break;
+    }
   }
 
   const newGunHeat = Math.max(0, bot.gunHeat - GUN_COOLING_RATE);
@@ -105,6 +175,7 @@ export function advanceBullets(
   bots: readonly BotState[],
   arenaW: number,
   arenaH: number,
+  obstacles: readonly Polygon[],
 ): {
   remaining: BulletState[];
   events: Array<HitByBulletEvent | BulletHitEvent | BulletMissedEvent>;
@@ -113,6 +184,8 @@ export function advanceBullets(
   const events: Array<HitByBulletEvent | BulletHitEvent | BulletMissedEvent> = [];
   const remaining: BulletState[] = [];
   const energyDeltas = new Map<string, number>();
+  const shieldDeltas = new Map<string, number>();
+  const shieldCooldownReset = new Set<string>();
 
   for (const bullet of bullets) {
     const dir = headingToVec(bullet.heading);
@@ -121,6 +194,19 @@ export function advanceBullets(
     const ny = bullet.position.y + dir.y * speed;
 
     if (nx < 0 || nx > arenaW || ny < 0 || ny > arenaH) {
+      events.push({ type: "bulletMissed", bulletId: bullet.id, ownerId: bullet.ownerId });
+      continue;
+    }
+
+    // Obstacle collision — check bullet's movement path to prevent tunneling
+    let hitObstacle = false;
+    for (const obs of obstacles) {
+      if (bulletPathHitsPolygon(bullet.position.x, bullet.position.y, nx, ny, obs)) {
+        hitObstacle = true;
+        break;
+      }
+    }
+    if (hitObstacle) {
       events.push({ type: "bulletMissed", bulletId: bullet.id, ownerId: bullet.ownerId });
       continue;
     }
@@ -134,8 +220,13 @@ export function advanceBullets(
       if (distanceSq(movedBullet.position, bot.position) > minDist * minDist) continue;
 
       hit = true;
-      const damage = bulletDamage(bullet.power);
-      energyDeltas.set(bot.id, (energyDeltas.get(bot.id) ?? 0) - damage);
+      const totalDamage = bulletDamage(bullet.power);
+      const shieldAbsorb = Math.min(totalDamage, bot.shield + (shieldDeltas.get(bot.id) ?? 0));
+      const energyDamage = totalDamage - shieldAbsorb;
+
+      shieldDeltas.set(bot.id, (shieldDeltas.get(bot.id) ?? 0) - shieldAbsorb);
+      energyDeltas.set(bot.id, (energyDeltas.get(bot.id) ?? 0) - energyDamage);
+      shieldCooldownReset.add(bot.id);
 
       events.push({
         type: "hitByBullet",
@@ -143,7 +234,7 @@ export function advanceBullets(
         bulletId: bullet.id,
         ownerId: bullet.ownerId,
         bearing: 0, // caller computes bearing if needed
-        damage,
+        damage: totalDamage,
       });
       events.push({
         type: "bulletHit",
@@ -158,12 +249,34 @@ export function advanceBullets(
   }
 
   const updatedBots = bots.map((bot) => {
-    const delta = energyDeltas.get(bot.id);
-    if (delta === undefined) return bot;
-    return { ...bot, energy: bot.energy + delta };
+    const energyDelta  = energyDeltas.get(bot.id);
+    const shieldDelta  = shieldDeltas.get(bot.id);
+    const resetCooldown = shieldCooldownReset.has(bot.id);
+    if (energyDelta === undefined && shieldDelta === undefined) return bot;
+    return {
+      ...bot,
+      energy: bot.energy + (energyDelta ?? 0),
+      shield: Math.max(0, bot.shield + (shieldDelta ?? 0)),
+      shieldCooldown: resetCooldown ? SHIELD_REGEN_DELAY : bot.shieldCooldown,
+    };
   });
 
   return { remaining, events, updatedBots };
+}
+
+// ─── Shield regeneration ──────────────────────────────────────────────────────
+
+export function regenShields(bots: readonly BotState[]): BotState[] {
+  return bots.map((bot) => {
+    if (!bot.isAlive) return bot;
+    if (bot.shieldCooldown > 0) {
+      return { ...bot, shieldCooldown: bot.shieldCooldown - 1 };
+    }
+    if (bot.shield < SHIELD_MAX) {
+      return { ...bot, shield: Math.min(SHIELD_MAX, bot.shield + SHIELD_REGEN_RATE) };
+    }
+    return bot;
+  });
 }
 
 // ─── Bot-bot collision ────────────────────────────────────────────────────────

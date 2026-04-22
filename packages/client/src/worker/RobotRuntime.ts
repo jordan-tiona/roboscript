@@ -16,6 +16,19 @@ import type { BotStateView, EnemyView } from "./protocol.js";
 
 export type CommandCallback = (cmd: BotCommand) => void;
 
+function pointInPolygon(px: number, py: number, poly: ReadonlyArray<{ x: number; y: number }>): boolean {
+  let inside = false;
+  const n = poly.length;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = poly[i]!.x, yi = poly[i]!.y;
+    const xj = poly[j]!.x, yj = poly[j]!.y;
+    if ((yi > py) !== (yj > py) && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
 /**
  * Base class for all user-written bots. Provides the async movement API,
  * per-tick event state, and cooperative async event callbacks.
@@ -51,6 +64,9 @@ export class RobotRuntime {
   _currentTickId = 0;
   private _botId = "";
   private _botCount = 0;
+  private _arenaWidth = 1200;
+  private _arenaHeight = 900;
+  private _obstacles: ReadonlyArray<ReadonlyArray<{ x: number; y: number }>> = [];
   private _sendCommand!: CommandCallback;
   private _tickResolve: ((events: readonly GameEvent[]) => void) | null = null;
   private _started = false;
@@ -62,12 +78,12 @@ export class RobotRuntime {
 
   // Default state — safe to read before first tick
   private _state: BotStateView = {
-    x: 0, y: 0, heading: 0, gunHeading: 0, energy: 100, velocity: 0, gunHeat: 3,
+    x: 0, y: 0, heading: 0, gunHeading: 0, energy: 100, velocity: 0, gunHeat: 3, shield: 20,
   };
   private _enemies: EnemyView[] = [];
 
   // Pending state built up by set* methods, flushed by execute()
-  // remainingAhead/Turn/GunTurn persist across ticks until consumed
+  // remainingAhead/Turn/GunTurn/RadarTurn persist across ticks until consumed
   private _pending: {
     remainingAhead?: number;
     remainingTurn?: number;
@@ -96,6 +112,11 @@ export class RobotRuntime {
   get energy() { return this._state.energy; }
   get velocity() { return this._state.velocity; }
   get gunHeat() { return this._state.gunHeat; }
+  get shield() { return this._state.shield; }
+  get arenaWidth() { return this._arenaWidth; }
+  get arenaHeight() { return this._arenaHeight; }
+  /** Static obstacle rects for this match. Bullets and LOS are blocked by these. */
+  get obstacles() { return this._obstacles; }
 
   /** All non-self bots. Always includes the full roster; check .alive and .visible. */
   get enemies(): readonly EnemyView[] { return this._enemies; }
@@ -107,11 +128,22 @@ export class RobotRuntime {
   get botCount(): number { return this._botCount; }
 
   // ── Internal init ─────────────────────────────────────────────────────────
-  _init(botId: string, botCount: number, sendCommand: CommandCallback, initialState: BotStateView): void {
+  _init(
+    botId: string,
+    botCount: number,
+    sendCommand: CommandCallback,
+    initialState: BotStateView,
+    arenaWidth: number,
+    arenaHeight: number,
+    obstacles: Array<Array<{ x: number; y: number }>>,
+  ): void {
     this._botId = botId;
     this._botCount = botCount;
     this._sendCommand = sendCommand;
     this._state = initialState;
+    this._arenaWidth = arenaWidth;
+    this._arenaHeight = arenaHeight;
+    this._obstacles = obstacles;
   }
 
   // ── Called by botWorker on each tick message ───────────────────────────────
@@ -244,6 +276,18 @@ export class RobotRuntime {
 
   // ── Utility methods ───────────────────────────────────────────────────────
 
+  /**
+   * Returns true if the given point is outside the arena bounds or inside a
+   * terrain obstacle. Useful for path planning and movement checks.
+   */
+  isOccupied(x: number, y: number): boolean {
+    if (x < 0 || x > this._arenaWidth || y < 0 || y > this._arenaHeight) return true;
+    for (const poly of this._obstacles) {
+      if (pointInPolygon(x, y, poly)) return true;
+    }
+    return false;
+  }
+
   /** Distance in units from this bot to any object with x/y coordinates. */
   distanceTo(target: { x: number; y: number }): number {
     return Math.hypot(target.x - this._state.x, target.y - this._state.y);
@@ -362,14 +406,21 @@ export class RobotRuntime {
    * Fire (setFire) is always one-shot and cleared after each call.
    */
   async execute(): Promise<void> {
-    const cmd: Omit<BotCommand, "botId"> = {};
+    const cmd: {
+      desiredVelocity?: number;
+      turnDegrees?: number;
+      turnGunDegrees?: number;
+      fire?: boolean;
+      firePower?: number;
+    } = {};
 
     if (this._pending.remainingAhead !== undefined) {
       const rem = this._pending.remainingAhead;
       const vel = Math.sign(rem) * Math.min(Math.abs(rem), MAX_SPEED);
       cmd.desiredVelocity = vel;
       const next = rem - vel;
-      this._pending.remainingAhead = Math.abs(next) < 0.5 ? undefined : next;
+      if (Math.abs(next) < 0.5) delete this._pending.remainingAhead;
+      else this._pending.remainingAhead = next;
     }
 
     if (this._pending.remainingTurn !== undefined) {
@@ -377,7 +428,8 @@ export class RobotRuntime {
       const turn = Math.sign(rem) * Math.min(Math.abs(rem), MAX_TURN_RATE);
       cmd.turnDegrees = turn;
       const next = rem - turn;
-      this._pending.remainingTurn = Math.abs(next) < 0.1 ? undefined : next;
+      if (Math.abs(next) < 0.1) delete this._pending.remainingTurn;
+      else this._pending.remainingTurn = next;
     }
 
     if (this._pending.remainingGunTurn !== undefined) {
@@ -385,14 +437,15 @@ export class RobotRuntime {
       const turn = Math.sign(rem) * Math.min(Math.abs(rem), MAX_GUN_TURN_RATE);
       cmd.turnGunDegrees = turn;
       const next = rem - turn;
-      this._pending.remainingGunTurn = Math.abs(next) < 0.1 ? undefined : next;
+      if (Math.abs(next) < 0.1) delete this._pending.remainingGunTurn;
+      else this._pending.remainingGunTurn = next;
     }
 
     if (this._pending.fire) {
       cmd.fire = true;
       if (this._pending.firePower !== undefined) cmd.firePower = this._pending.firePower;
-      this._pending.fire = undefined;
-      this._pending.firePower = undefined;
+      delete this._pending.fire;
+      delete this._pending.firePower;
     }
 
     await this._nextTick(cmd);

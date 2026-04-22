@@ -1,10 +1,11 @@
-import type { GameState, BotCommand, GameEvent, BotState, Vec2 } from "./types.js";
-import { ARENA_WIDTH, ARENA_HEIGHT, MAX_ENERGY, BOT_RADIUS } from "./constants.js";
+import type { GameState, BotCommand, GameEvent, BotState, Vec2, Polygon } from "./types.js";
+import { ARENA_WIDTH, ARENA_HEIGHT, MAX_ENERGY, BOT_RADIUS, SHIELD_MAX } from "./constants.js";
 import {
   applyBotCommand,
   createBullet,
   advanceBullets,
   resolveBotCollisions,
+  regenShields,
 } from "./physics.js";
 import { computeVisibility } from "./visibility.js";
 
@@ -20,7 +21,7 @@ export function tick(state: GameState, commands: readonly BotCommand[]): GameSta
 
   // 1. Movement, rotation, wall collision
   let bots: BotState[] = state.bots.map((bot) => {
-    const { next, event } = applyBotCommand(bot, cmdMap.get(bot.id));
+    const { next, event } = applyBotCommand(bot, cmdMap.get(bot.id), state.obstacles);
     if (event) events.push(event);
     return next;
   });
@@ -45,6 +46,7 @@ export function tick(state: GameState, commands: readonly BotCommand[]): GameSta
     bots,
     ARENA_WIDTH,
     ARENA_HEIGHT,
+    state.obstacles,
   );
   bots = updatedBots;
   events.push(...bulletEvents);
@@ -63,8 +65,11 @@ export function tick(state: GameState, commands: readonly BotCommand[]): GameSta
     return bot;
   });
 
+  // 5.5 Shield regeneration
+  bots = regenShields(bots);
+
   // 6. Compute visibility (after movement so updated positions are used)
-  const visibility = computeVisibility(bots);
+  const visibility = computeVisibility(bots, state.obstacles);
 
   // 7. Win condition
   const alive = bots.filter((b) => b.isAlive);
@@ -77,17 +82,63 @@ export function tick(state: GameState, commands: readonly BotCommand[]): GameSta
     bullets: remaining,
     events,
     visibility,
+    obstacles: state.obstacles,
     isOver,
     winnerId,
     nextBulletId,
   };
 }
 
-/**
- * For each bot, pick the random candidate position that maximises the minimum
- * distance to already-placed bots and arena edges. More candidates = better
- * spread at the cost of a tiny bit of startup time.
- */
+// ─── Obstacle generation ──────────────────────────────────────────────────────
+
+const OBSTACLE_COUNT        = 2;
+const OBSTACLE_CENTER_MARGIN = 150;  // keep centers away from arena edges
+const OBSTACLE_MIN_RADIUS   = 50;
+const OBSTACLE_MAX_RADIUS   = 90;
+const OBSTACLE_MIN_SEPARATION = 280; // min distance between obstacle centers
+
+function generateObstacles(): Polygon[] {
+  const obstacles: Polygon[] = [];
+
+  for (let attempt = 0; attempt < 100 && obstacles.length < OBSTACLE_COUNT; attempt++) {
+    const cx = OBSTACLE_CENTER_MARGIN + Math.random() * (ARENA_WIDTH  - OBSTACLE_CENTER_MARGIN * 2);
+    const cy = OBSTACLE_CENTER_MARGIN + Math.random() * (ARENA_HEIGHT - OBSTACLE_CENTER_MARGIN * 2);
+
+    const tooClose = obstacles.some((obs) => {
+      const c = polygonCentroid(obs);
+      return Math.hypot(cx - c.x, cy - c.y) < OBSTACLE_MIN_SEPARATION;
+    });
+    if (tooClose) continue;
+
+    obstacles.push(randomConvexPolygon(cx, cy));
+  }
+
+  return obstacles;
+}
+
+function polygonCentroid(poly: Polygon): Vec2 {
+  return {
+    x: poly.reduce((s, v) => s + v.x, 0) / poly.length,
+    y: poly.reduce((s, v) => s + v.y, 0) / poly.length,
+  };
+}
+
+function randomConvexPolygon(cx: number, cy: number): Polygon {
+  const n = 4 + Math.floor(Math.random() * 3); // 4–6 vertices
+  const baseStep = (Math.PI * 2) / n;
+  const angles = Array.from({ length: n }, (_, i) =>
+    i * baseStep + (Math.random() - 0.5) * baseStep * 0.6,
+  );
+  angles.sort((a, b) => a - b);
+
+  return angles.map((angle) => ({
+    x: Math.round(cx + (OBSTACLE_MIN_RADIUS + Math.random() * (OBSTACLE_MAX_RADIUS - OBSTACLE_MIN_RADIUS)) * Math.cos(angle)),
+    y: Math.round(cy + (OBSTACLE_MIN_RADIUS + Math.random() * (OBSTACLE_MAX_RADIUS - OBSTACLE_MIN_RADIUS)) * Math.sin(angle)),
+  }));
+}
+
+// ─── Spawn position generation ────────────────────────────────────────────────
+
 function generateSpawnPositions(count: number): Vec2[] {
   const margin = BOT_RADIUS + 30;
   const safeW = ARENA_WIDTH  - margin * 2;
@@ -103,7 +154,6 @@ function generateSpawnPositions(count: number): Vec2[] {
       const x = margin + Math.random() * safeW;
       const y = margin + Math.random() * safeH;
 
-      // Score: minimum distance to any edge or already-placed bot
       let score = Math.min(x - margin, y - margin, ARENA_WIDTH - margin - x, ARENA_HEIGHT - margin - y);
       for (const p of placed) {
         const d = Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2);
@@ -125,6 +175,7 @@ function generateSpawnPositions(count: number): Vec2[] {
 export function buildInitialState(
   botDefs: Array<{ id: string; name: string }>,
 ): GameState {
+  const obstacles = generateObstacles();
   const positions = generateSpawnPositions(botDefs.length);
 
   const bots: BotState[] = botDefs.map((def, i) => ({
@@ -137,6 +188,8 @@ export function buildInitialState(
     energy: MAX_ENERGY,
     gunHeat: 3,
     isAlive: true,
+    shield: SHIELD_MAX,
+    shieldCooldown: 0,
   }));
 
   return {
@@ -144,7 +197,8 @@ export function buildInitialState(
     bots,
     bullets: [],
     events: [],
-    visibility: computeVisibility(bots),
+    visibility: computeVisibility(bots, obstacles),
+    obstacles,
     isOver: false,
     winnerId: null,
     nextBulletId: 0,

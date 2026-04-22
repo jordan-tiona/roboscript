@@ -5,18 +5,22 @@ export interface Vec2 {
   readonly y: number;
 }
 
+export type Polygon = readonly Vec2[];
+
 // ─── Entity State ─────────────────────────────────────────────────────────────
 
 export interface BotState {
   readonly id: string;
   readonly name: string;
   readonly position: Vec2;
-  readonly velocity: number;      // scalar; direction is always heading
-  readonly heading: number;       // degrees, 0 = north, clockwise
-  readonly gunHeading: number;    // absolute degrees; independent of body heading
+  readonly velocity: number;       // scalar; direction is always heading
+  readonly heading: number;        // degrees, 0 = north, clockwise
+  readonly gunHeading: number;     // absolute degrees; independent of body heading
   readonly energy: number;
   readonly gunHeat: number;
   readonly isAlive: boolean;
+  readonly shield: number;         // current shield HP (0–SHIELD_MAX); absorbs bullet damage
+  readonly shieldCooldown: number; // ticks until regen starts; resets to SHIELD_REGEN_DELAY on hit
 }
 
 export interface BulletState {
@@ -38,6 +42,7 @@ export interface GameState {
   readonly bullets: readonly BulletState[];
   readonly events: readonly GameEvent[];
   readonly visibility: readonly VisibilityPair[];
+  readonly obstacles: readonly Polygon[];
   readonly isOver: boolean;
   readonly winnerId: string | null;
   readonly nextBulletId: number;

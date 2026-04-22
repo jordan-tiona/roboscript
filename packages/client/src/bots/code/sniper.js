@@ -1,7 +1,7 @@
 class MyRobot extends Robot {
   async run() {
     // Turn to face the nearest wall head-on so the 90° hug turn lands correctly
-    const ARENA_W = 800, ARENA_H = 600;
+    const ARENA_W = this.arenaWidth, ARENA_H = this.arenaHeight;
     const walls = [
       { heading: 0,   dist: this.y },
       { heading: 90,  dist: ARENA_W - this.x },

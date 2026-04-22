@@ -1,5 +1,5 @@
 import type { GameState } from "@roboscript/engine";
-import { BOT_RADIUS, BULLET_RADIUS, ARENA_WIDTH, ARENA_HEIGHT } from "@roboscript/engine";
+import { BOT_RADIUS, BULLET_RADIUS, ARENA_WIDTH, ARENA_HEIGHT, SHIELD_MAX } from "@roboscript/engine";
 
 const BOT_COLORS = ["#4fc3f7", "#ef5350", "#66bb6a", "#ffa726", "#ce93d8", "#80cbc4"];
 
@@ -26,6 +26,37 @@ function darkenColor(hex: string, amount: number): string {
 /** Extra pixels added around the arena so UI elements (health bars, names)
  *  aren't clipped when bots are near the edge. */
 export const CANVAS_PADDING = 32;
+
+// Returns the shadow quad cast behind `poly` from viewpoint (vx, vy).
+// Uses the largest angular gap between vertices to find the two silhouette vertices.
+function obstacleShadow(
+  vx: number, vy: number,
+  poly: readonly { x: number; y: number }[],
+): [{ x: number; y: number }, { x: number; y: number }, { x: number; y: number }, { x: number; y: number }] | null {
+  if (poly.length < 2) return null;
+  const angles = poly.map(v => Math.atan2(v.y - vy, v.x - vx));
+  const sorted = angles.map((a, i) => ({ a, i })).sort((p, q) => p.a - q.a);
+  let maxGap = 0, gapIdx = 0;
+  for (let i = 0; i < sorted.length; i++) {
+    const ni = (i + 1) % sorted.length;
+    const gap = ni === 0
+      ? sorted[0]!.a + Math.PI * 2 - sorted[i]!.a
+      : sorted[ni]!.a - sorted[i]!.a;
+    if (gap > maxGap) { maxGap = gap; gapIdx = i; }
+  }
+  const s1 = poly[sorted[gapIdx]!.i]!;
+  const s2 = poly[sorted[(gapIdx + 1) % sorted.length]!.i]!;
+  const FAR = 2500;
+  const d1x = s1.x - vx, d1y = s1.y - vy, l1 = Math.hypot(d1x, d1y);
+  const d2x = s2.x - vx, d2y = s2.y - vy, l2 = Math.hypot(d2x, d2y);
+  if (l1 === 0 || l2 === 0) return null;
+  return [
+    s1,
+    { x: s1.x + (d1x / l1) * FAR, y: s1.y + (d1y / l1) * FAR },
+    { x: s2.x + (d2x / l2) * FAR, y: s2.y + (d2y / l2) * FAR },
+    s2,
+  ];
+}
 
 export function renderFrame(
   ctx: CanvasRenderingContext2D,
@@ -57,6 +88,48 @@ export function renderFrame(
   ctx.strokeStyle = "#3a3a6e";
   ctx.lineWidth = 3;
   ctx.strokeRect(1.5, 1.5, ARENA_WIDTH - 3, ARENA_HEIGHT - 3);
+
+  // Obstacles
+  for (const poly of state.obstacles) {
+    ctx.beginPath();
+    ctx.moveTo(poly[0]!.x, poly[0]!.y);
+    for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i]!.x, poly[i]!.y);
+    ctx.closePath();
+    ctx.fillStyle = "#1e1e40";
+    ctx.fill();
+    ctx.strokeStyle = "#4a4a8e";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  // Per-bot vision: fill arena in bot color, clip out obstacle shadows (even-odd rule)
+  state.bots.forEach((bot, i) => {
+    if (!bot.isAlive) return;
+    const color = BOT_COLORS[i % BOT_COLORS.length] ?? "#fff";
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, ARENA_WIDTH, ARENA_HEIGHT); // base: full arena visible
+    for (const obs of state.obstacles) {
+      // Obstacle body
+      ctx.moveTo(obs[0]!.x, obs[0]!.y);
+      for (let k = 1; k < obs.length; k++) ctx.lineTo(obs[k]!.x, obs[k]!.y);
+      ctx.closePath();
+      // Shadow quad behind obstacle
+      const shadow = obstacleShadow(bot.position.x, bot.position.y, obs);
+      if (shadow) {
+        ctx.moveTo(shadow[0].x, shadow[0].y);
+        ctx.lineTo(shadow[1].x, shadow[1].y);
+        ctx.lineTo(shadow[2].x, shadow[2].y);
+        ctx.lineTo(shadow[3].x, shadow[3].y);
+        ctx.closePath();
+      }
+    }
+    ctx.clip("evenodd");
+    ctx.globalAlpha = 0.07;
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
+    ctx.restore();
+  });
 
   // Bullets
   for (const bullet of state.bullets) {
@@ -159,6 +232,29 @@ export function renderFrame(
       ctx.strokeStyle = "#444";
       ctx.lineWidth = 1;
       ctx.strokeRect(barX, barY, barW, barH);
+
+      // Shield bar
+      const sbY = barY + barH + 1;
+      const shieldPct = Math.max(0, bot.shield / SHIELD_MAX);
+      const shieldRegen = bot.shieldCooldown === 0 && bot.shield < SHIELD_MAX;
+      const shieldCooldown = bot.shieldCooldown > 0;
+      ctx.fillStyle = "#222";
+      ctx.fillRect(barX, sbY, barW, barH);
+      if (shieldPct > 0) {
+        ctx.fillStyle = shieldCooldown ? "#546e7a" : "#42a5f5";
+        ctx.fillRect(barX, sbY, barW * shieldPct, barH);
+      }
+      if (shieldRegen) {
+        const pulse = (Math.sin(state.tick * 0.25) + 1) / 2;
+        ctx.shadowBlur = 3 + pulse * 7;
+        ctx.shadowColor = "#90caf9";
+        ctx.strokeStyle = `rgba(144, 202, 249, ${0.4 + pulse * 0.6})`;
+      } else {
+        ctx.strokeStyle = "#444";
+      }
+      ctx.lineWidth = 1;
+      ctx.strokeRect(barX, sbY, barW, barH);
+      ctx.shadowBlur = 0;
 
       // Bot name
       ctx.fillStyle = color;

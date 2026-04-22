@@ -46,7 +46,7 @@ return new MyRobot();`,
           command: cmd,
         };
         workerSelf.postMessage(reply);
-      }, msg.initialState);
+      }, msg.initialState, msg.arenaWidth, msg.arenaHeight, msg.obstacles);
 
       const ready: WorkerToMain = { type: "ready", botId };
       workerSelf.postMessage(ready);

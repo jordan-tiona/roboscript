@@ -1,4 +1,4 @@
-import { tick, buildInitialState } from "@roboscript/engine";
+import { tick, buildInitialState, ARENA_WIDTH, ARENA_HEIGHT } from "@roboscript/engine";
 import type { GameState, BotCommand } from "@roboscript/engine";
 import type { MainToWorker, WorkerToMain, EnemyView } from "../worker/protocol.js";
 
@@ -83,7 +83,11 @@ export class GameDriver {
           energy: botState.energy,
           velocity: botState.velocity,
           gunHeat: botState.gunHeat,
+          shield: botState.shield,
         },
+        arenaWidth: ARENA_WIDTH,
+        arenaHeight: ARENA_HEIGHT,
+        obstacles: this.state.obstacles.map(poly => poly.map(v => ({ x: v.x, y: v.y }))),
       };
       worker.postMessage(initMsg);
       readyPromises.push(readyPromise);
@@ -186,6 +190,7 @@ export class GameDriver {
           energy: bot.energy,
           velocity: bot.velocity,
           gunHeat: bot.gunHeat,
+          shield: bot.shield,
         },
         enemies: this.buildEnemyViews(bot.id),
         events: botEvents,

@@ -3,7 +3,17 @@ import type { BotCommand, GameEvent } from "@roboscript/engine";
 // ─── Main thread → Worker ─────────────────────────────────────────────────────
 
 export type MainToWorker =
-  | { type: "init"; botId: string; botName: string; botCount: number; code: string; initialState: BotStateView }
+  | {
+      type: "init";
+      botId: string;
+      botName: string;
+      botCount: number;
+      code: string;
+      initialState: BotStateView;
+      arenaWidth: number;
+      arenaHeight: number;
+      obstacles: Array<Array<{ x: number; y: number }>>;
+    }
   | { type: "tick"; tickId: number; state: BotStateView; enemies: EnemyView[]; events: GameEvent[] }
   | { type: "terminate" };
 
@@ -25,6 +35,7 @@ export interface BotStateView {
   readonly energy: number;
   readonly velocity: number;
   readonly gunHeat: number;
+  readonly shield: number;
 }
 
 // ─── Per-enemy view sent to each bot each tick ────────────────────────────────
