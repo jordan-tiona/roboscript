@@ -11,9 +11,16 @@ export default defineConfig({
     format: "es",
   },
   resolve: {
-    // Point directly at engine source during development — no need to build first
     alias: {
       "@roboscript/engine": path.resolve(__dirname, "../engine/src/index.ts"),
+    },
+  },
+  server: {
+    proxy: {
+      "/api": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
     },
   },
 });

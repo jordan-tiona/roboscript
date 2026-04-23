@@ -1,0 +1,33 @@
+:root {
+  --color-bg:          #0d0d1a;
+  --color-bg-panel:    #0a0a18;
+  --color-bg-card:     #12122a;
+  --color-bg-input:    #0d0d22;
+  --color-border:      #2a2a4e;
+  --color-border-focus:#5a5aae;
+  --color-accent:      #5a5aae;
+  --color-accent-hover:#7070cc;
+  --color-text:        #eeeeee;
+  --color-text-muted:  #666680;
+  --color-text-dim:    #444460;
+  --color-error:       #e05a5a;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+
+  --font-mono: "Fira Mono", "Cascadia Code", "Consolas", monospace;
+  --font-ui:   system-ui, sans-serif;
+
+  --transition: 0.15s ease;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-ui);
+}

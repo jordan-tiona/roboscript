@@ -68,3 +68,9 @@ export const botSlots = pgTable("bot_slots", {
 }, (t) => [
   uniqueIndex("bot_slots_user_slot_idx").on(t.userId, t.slotIndex),
 ]);
+
+export const tutorialProgress = pgTable("tutorial_progress", {
+  userId:         text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
+  challengeIndex: integer("challenge_index").notNull().default(0),
+  updatedAt:      timestamp("updated_at").notNull().defaultNow(),
+});
