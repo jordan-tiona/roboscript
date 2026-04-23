@@ -1,6 +1,6 @@
 import { ARENA_WIDTH, ARENA_HEIGHT } from "@roboscript/engine";
 import { CANVAS_PADDING } from "./renderer.js";
-import type { GameState } from "@roboscript/engine";
+import type { GameState, BuildOptions } from "@roboscript/engine";
 import { GameDriver } from "./GameDriver.js";
 import type { BotEntry, LogCallback } from "./GameDriver.js";
 import { renderFrame } from "./renderer.js";
@@ -14,15 +14,17 @@ export class GameLoop {
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private latestState: GameState | null = null;
   private running = false;
-  private onGameOver: (() => void) | null = null;
+  private onGameOver: ((winnerId: string | null) => void) | null = null;
   private countdown: number | null = null;
 
-  constructor(canvas: HTMLCanvasElement, bots: BotEntry[], onGameOver?: () => void, onLog?: LogCallback) {
+  constructor(canvas: HTMLCanvasElement, bots: BotEntry[], onGameOver?: (winnerId: string | null) => void, onLog?: LogCallback, arenaOptions?: BuildOptions) {
     this.onGameOver = onGameOver ?? null;
-    this.driver = new GameDriver(bots, onLog);
+    this.driver = new GameDriver(bots, onLog, arenaOptions);
     this.canvas = canvas;
-    this.canvas.width = ARENA_WIDTH + CANVAS_PADDING * 2;
-    this.canvas.height = ARENA_HEIGHT + CANVAS_PADDING * 2;
+    const arenaW = arenaOptions?.arenaWidth  ?? ARENA_WIDTH;
+    const arenaH = arenaOptions?.arenaHeight ?? ARENA_HEIGHT;
+    this.canvas.width  = arenaW + CANVAS_PADDING * 2;
+    this.canvas.height = arenaH + CANVAS_PADDING * 2;
     this.ctx = canvas.getContext("2d")!;
   }
 
@@ -58,7 +60,7 @@ export class GameLoop {
       if (this.driver.getState().isOver) {
         this.stopTicking();
         this.running = false;
-        this.onGameOver?.();
+        this.onGameOver?.(this.driver.getState().winnerId);
         return;
       }
       this.driver.runTick((s) => { this.latestState = s; }).catch(console.error);

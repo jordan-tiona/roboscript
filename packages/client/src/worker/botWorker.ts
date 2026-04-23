@@ -24,19 +24,24 @@ workerSelf.onmessage = (evt: MessageEvent<MainToWorker>) => {
     };
 
     try {
-      // Sandboxed eval: Robot is injected as a parameter so user code cannot
-      // reach the real module. The user's class must be named MyRobot.
+      // Extract the class name from source — supports any name, not just MyRobot.
+      const classMatch = msg.code.match(/class\s+(\w+)\s+extends\s+(?:Robot|RobotRuntime)\b/);
+      const className = classMatch?.[1] ?? "MyRobot";
+
+      // Sandboxed eval: both Robot and RobotRuntime are injected so user code
+      // can extend either name. Neither reaches the real module scope.
       const factory = new Function(
         "Robot",
+        "RobotRuntime",
         `"use strict";
 ${msg.code}
-if (typeof MyRobot === 'undefined') {
-  throw new Error('Your code must define a class named MyRobot that extends Robot');
+if (typeof ${className} === 'undefined') {
+  throw new Error('Your bot must define a class that extends Robot');
 }
-return new MyRobot();`,
+return new ${className}();`,
       );
 
-      runtime = factory(RobotRuntime) as RobotRuntime;
+      runtime = factory(RobotRuntime, RobotRuntime) as RobotRuntime;
 
       runtime._init(botId, msg.botCount, (cmd) => {
         const reply: WorkerToMain = {

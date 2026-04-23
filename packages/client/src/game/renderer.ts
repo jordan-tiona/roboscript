@@ -65,6 +65,8 @@ export function renderFrame(
   h: number,
 ): void {
   const p = CANVAS_PADDING;
+  const aW = state.arenaWidth;
+  const aH = state.arenaHeight;
 
   // Background — fill entire canvas including padding
   ctx.fillStyle = "#0d0d1a";
@@ -77,17 +79,17 @@ export function renderFrame(
   // Grid (subtle)
   ctx.strokeStyle = "#1a1a3e";
   ctx.lineWidth = 1;
-  for (let x = 0; x <= ARENA_WIDTH; x += 50) {
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, ARENA_HEIGHT); ctx.stroke();
+  for (let x = 0; x <= aW; x += 50) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, aH); ctx.stroke();
   }
-  for (let y = 0; y <= ARENA_HEIGHT; y += 50) {
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(ARENA_WIDTH, y); ctx.stroke();
+  for (let y = 0; y <= aH; y += 50) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(aW, y); ctx.stroke();
   }
 
   // Arena border
   ctx.strokeStyle = "#3a3a6e";
   ctx.lineWidth = 3;
-  ctx.strokeRect(1.5, 1.5, ARENA_WIDTH - 3, ARENA_HEIGHT - 3);
+  ctx.strokeRect(1.5, 1.5, aW - 3, aH - 3);
 
   // Obstacles
   for (const poly of state.obstacles) {
@@ -108,7 +110,7 @@ export function renderFrame(
     const color = BOT_COLORS[i % BOT_COLORS.length] ?? "#fff";
     ctx.save();
     ctx.beginPath();
-    ctx.rect(0, 0, ARENA_WIDTH, ARENA_HEIGHT); // base: full arena visible
+    ctx.rect(0, 0, aW, aH); // base: full arena visible
     for (const obs of state.obstacles) {
       // Obstacle body
       ctx.moveTo(obs[0]!.x, obs[0]!.y);
@@ -127,7 +129,7 @@ export function renderFrame(
     ctx.clip("evenodd");
     ctx.globalAlpha = 0.07;
     ctx.fillStyle = color;
-    ctx.fillRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
+    ctx.fillRect(0, 0, aW, aH);
     ctx.restore();
   });
 

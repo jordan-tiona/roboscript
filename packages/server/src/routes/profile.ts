@@ -38,3 +38,18 @@ profileRouter.post("/reset-tutorial", async (c) => {
     });
   return c.json({ ok: true });
 });
+
+profileRouter.post("/advance-challenge", async (c) => {
+  const userId = c.get("userId");
+  const [current] = await db.select({ challengeIndex: tutorialProgress.challengeIndex })
+    .from(tutorialProgress).where(eq(tutorialProgress.userId, userId));
+  const next = (current?.challengeIndex ?? 0) + 1;
+  await db
+    .insert(tutorialProgress)
+    .values({ userId, challengeIndex: next, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: tutorialProgress.userId,
+      set: { challengeIndex: next, updatedAt: new Date() },
+    });
+  return c.json({ challengeIndex: next });
+});

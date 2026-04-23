@@ -1,5 +1,5 @@
-import { tick, buildInitialState, ARENA_WIDTH, ARENA_HEIGHT } from "@roboscript/engine";
-import type { GameState, BotCommand } from "@roboscript/engine";
+import { tick, buildInitialState } from "@roboscript/engine";
+import type { GameState, BotCommand, BuildOptions } from "@roboscript/engine";
 import type { MainToWorker, WorkerToMain, EnemyView } from "../worker/protocol.js";
 
 const TICK_DEADLINE_MS = 50;  // max ms to wait for a bot command per tick
@@ -32,8 +32,8 @@ export class GameDriver {
   private lastKnown = new Map<string, Map<string, LastKnownEntry>>();
   private onLog: LogCallback | undefined;
 
-  constructor(bots: BotEntry[], onLog?: LogCallback) {
-    this.state = buildInitialState(bots.map((b) => ({ id: b.id, name: b.name })));
+  constructor(bots: BotEntry[], onLog?: LogCallback, arenaOptions?: BuildOptions) {
+    this.state = buildInitialState(bots.map((b) => ({ id: b.id, name: b.name })), arenaOptions);
     this.onLog = onLog;
   }
 
@@ -85,8 +85,8 @@ export class GameDriver {
           gunHeat: botState.gunHeat,
           shield: botState.shield,
         },
-        arenaWidth: ARENA_WIDTH,
-        arenaHeight: ARENA_HEIGHT,
+        arenaWidth: this.state.arenaWidth,
+        arenaHeight: this.state.arenaHeight,
         obstacles: this.state.obstacles.map(poly => poly.map(v => ({ x: v.x, y: v.y }))),
       };
       worker.postMessage(initMsg);

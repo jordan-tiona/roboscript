@@ -115,6 +115,7 @@ export class RobotRuntime {
   get shield() { return this._state.shield; }
   get arenaWidth() { return this._arenaWidth; }
   get arenaHeight() { return this._arenaHeight; }
+  get tick() { return this._currentTickId; }
   /** Static obstacle rects for this match. Bullets and LOS are blocked by these. */
   get obstacles() { return this._obstacles; }
 
@@ -358,6 +359,9 @@ export class RobotRuntime {
 
   /** Set total backward distance to travel (spread across ticks by execute()). */
   setBack(distance: number): void  { this._pending.remainingAhead = -Math.abs(distance); }
+
+  /** Set distance to travel; positive = forward, negative = backward. */
+  setMove(distance: number): void  { this._pending.remainingAhead = distance; }
 
   /** Set total body rotation in degrees (positive = clockwise). */
   setTurn(degrees: number): void        { this._pending.remainingTurn    =  degrees; }

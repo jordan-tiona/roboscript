@@ -1,17 +1,20 @@
 import { useEffect, useRef } from "react";
 import { GameLoop } from "../game/GameLoop.js";
-import { BUILT_IN_BOTS } from "../bots/index.js";
+import duelistCode  from "../bots/code/tutorial/duelist.js?raw";
+import wandererCode from "../bots/code/tutorial/wanderer.js?raw";
+import sprinterCode from "../bots/code/tutorial/sprinter.js?raw";
+import type { BotEntry } from "../game/GameDriver.js";
 
-const DEMO_BOTS = [
-  { ...BUILT_IN_BOTS[0]!.entry, id: "demo-0" },
-  { ...BUILT_IN_BOTS[1]!.entry, id: "demo-1" },
-  { ...BUILT_IN_BOTS[2]!.entry, id: "demo-2" },
+const DEMO_BOTS: BotEntry[] = [
+  { id: "demo-0", name: "Duelist",  code: duelistCode  },
+  { id: "demo-1", name: "Wanderer", code: wandererCode },
+  { id: "demo-2", name: "Sprinter", code: sprinterCode },
 ];
 
 export function SplashCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const loopRef  = useRef<GameLoop | null>(null);
-  const aliveRef = useRef(true);
+  const loopRef   = useRef<GameLoop | null>(null);
+  const aliveRef  = useRef(true);
 
   useEffect(() => {
     aliveRef.current = true;
@@ -19,7 +22,6 @@ export function SplashCanvas() {
     async function runGame() {
       if (!aliveRef.current || !canvasRef.current) return;
       const loop = new GameLoop(canvasRef.current, DEMO_BOTS, () => {
-        // auto-restart after a short pause
         if (aliveRef.current) setTimeout(runGame, 2500);
       });
       loopRef.current = loop;

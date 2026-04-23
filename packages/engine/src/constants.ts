@@ -22,7 +22,7 @@ export const MAX_BULLET_POWER = 3.0;
 export const DEFAULT_BULLET_POWER = 1.0;
 
 export const bulletSpeed   = (p: number): number => 26 - 3 * p;
-export const bulletDamage  = (p: number): number => 6 * p;
+export const bulletDamage  = (p: number): number => 8 * p;
 export const bulletGunHeat = (p: number): number => 1 + p / 5;
 
 // ─── Shield ───────────────────────────────────────────────────────────────────

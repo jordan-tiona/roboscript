@@ -16,12 +16,13 @@ import { computeVisibility } from "./visibility.js";
 export function tick(state: GameState, commands: readonly BotCommand[]): GameState {
   if (state.isOver) return state;
 
+  const { arenaWidth: arenaW, arenaHeight: arenaH } = state;
   const cmdMap = new Map<string, BotCommand>(commands.map((c) => [c.botId, c]));
   const events: GameEvent[] = [];
 
   // 1. Movement, rotation, wall collision
   let bots: BotState[] = state.bots.map((bot) => {
-    const { next, event } = applyBotCommand(bot, cmdMap.get(bot.id), state.obstacles);
+    const { next, event } = applyBotCommand(bot, cmdMap.get(bot.id), state.obstacles, arenaW, arenaH);
     if (event) events.push(event);
     return next;
   });
@@ -52,7 +53,7 @@ export function tick(state: GameState, commands: readonly BotCommand[]): GameSta
   events.push(...bulletEvents);
 
   // 4. Bot-bot collisions
-  const { bots: collidedBots, events: collisionEvents } = resolveBotCollisions(bots);
+  const { bots: collidedBots, events: collisionEvents } = resolveBotCollisions(bots, arenaW, arenaH);
   bots = collidedBots;
   events.push(...collisionEvents);
 
@@ -86,27 +87,32 @@ export function tick(state: GameState, commands: readonly BotCommand[]): GameSta
     isOver,
     winnerId,
     nextBulletId,
+    arenaWidth: arenaW,
+    arenaHeight: arenaH,
   };
 }
 
 // ─── Obstacle generation ──────────────────────────────────────────────────────
 
-const OBSTACLE_COUNT        = 2;
-const OBSTACLE_CENTER_MARGIN = 150;  // keep centers away from arena edges
-const OBSTACLE_MIN_RADIUS   = 50;
-const OBSTACLE_MAX_RADIUS   = 90;
-const OBSTACLE_MIN_SEPARATION = 280; // min distance between obstacle centers
+const OBSTACLE_COUNT          = 2;
+const OBSTACLE_MARGIN_RATIO   = 0.125; // center margin as fraction of arena dimension
+const OBSTACLE_MIN_RADIUS     = 50;
+const OBSTACLE_MAX_RADIUS     = 90;
+const OBSTACLE_SEPARATION_RATIO = 0.23; // min separation as fraction of arena width
 
-function generateObstacles(): Polygon[] {
+function generateObstacles(arenaW: number, arenaH: number): Polygon[] {
   const obstacles: Polygon[] = [];
+  const marginX = arenaW * OBSTACLE_MARGIN_RATIO;
+  const marginY = arenaH * OBSTACLE_MARGIN_RATIO;
+  const minSep  = arenaW * OBSTACLE_SEPARATION_RATIO;
 
   for (let attempt = 0; attempt < 100 && obstacles.length < OBSTACLE_COUNT; attempt++) {
-    const cx = OBSTACLE_CENTER_MARGIN + Math.random() * (ARENA_WIDTH  - OBSTACLE_CENTER_MARGIN * 2);
-    const cy = OBSTACLE_CENTER_MARGIN + Math.random() * (ARENA_HEIGHT - OBSTACLE_CENTER_MARGIN * 2);
+    const cx = marginX + Math.random() * (arenaW - marginX * 2);
+    const cy = marginY + Math.random() * (arenaH - marginY * 2);
 
     const tooClose = obstacles.some((obs) => {
       const c = polygonCentroid(obs);
-      return Math.hypot(cx - c.x, cy - c.y) < OBSTACLE_MIN_SEPARATION;
+      return Math.hypot(cx - c.x, cy - c.y) < minSep;
     });
     if (tooClose) continue;
 
@@ -139,10 +145,10 @@ function randomConvexPolygon(cx: number, cy: number): Polygon {
 
 // ─── Spawn position generation ────────────────────────────────────────────────
 
-function generateSpawnPositions(count: number): Vec2[] {
+function generateSpawnPositions(count: number, arenaW: number, arenaH: number): Vec2[] {
   const margin = BOT_RADIUS + 30;
-  const safeW = ARENA_WIDTH  - margin * 2;
-  const safeH = ARENA_HEIGHT - margin * 2;
+  const safeW = arenaW - margin * 2;
+  const safeH = arenaH - margin * 2;
   const CANDIDATES = 64;
   const placed: Vec2[] = [];
 
@@ -154,7 +160,7 @@ function generateSpawnPositions(count: number): Vec2[] {
       const x = margin + Math.random() * safeW;
       const y = margin + Math.random() * safeH;
 
-      let score = Math.min(x - margin, y - margin, ARENA_WIDTH - margin - x, ARENA_HEIGHT - margin - y);
+      let score = Math.min(x - margin, y - margin, arenaW - margin - x, arenaH - margin - y);
       for (const p of placed) {
         const d = Math.sqrt((x - p.x) ** 2 + (y - p.y) ** 2);
         if (d < score) score = d;
@@ -172,16 +178,27 @@ function generateSpawnPositions(count: number): Vec2[] {
   return placed;
 }
 
+export interface BuildOptions {
+  arenaWidth?: number;
+  arenaHeight?: number;
+  obstacles?: boolean;
+}
+
 export function buildInitialState(
   botDefs: Array<{ id: string; name: string }>,
+  options: BuildOptions = {},
 ): GameState {
-  const obstacles = generateObstacles();
-  const positions = generateSpawnPositions(botDefs.length);
+  const arenaW = options.arenaWidth  ?? ARENA_WIDTH;
+  const arenaH = options.arenaHeight ?? ARENA_HEIGHT;
+  const withObstacles = options.obstacles !== false;
+
+  const obstacles = withObstacles ? generateObstacles(arenaW, arenaH) : [];
+  const positions = generateSpawnPositions(botDefs.length, arenaW, arenaH);
 
   const bots: BotState[] = botDefs.map((def, i) => ({
     id: def.id,
     name: def.name,
-    position: positions[i] ?? { x: ARENA_WIDTH / 2, y: ARENA_HEIGHT / 2 },
+    position: positions[i] ?? { x: arenaW / 2, y: arenaH / 2 },
     velocity: 0,
     heading: Math.random() * 360,
     gunHeading: Math.random() * 360,
@@ -202,5 +219,7 @@ export function buildInitialState(
     isOver: false,
     winnerId: null,
     nextBulletId: 0,
+    arenaWidth: arenaW,
+    arenaHeight: arenaH,
   };
 }

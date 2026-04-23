@@ -93,6 +93,8 @@ export function applyBotCommand(
   bot: BotState,
   cmd: BotCommand | undefined,
   obstacles: readonly Polygon[],
+  arenaW: number = ARENA_WIDTH,
+  arenaH: number = ARENA_HEIGHT,
 ): { next: BotState; event: HitWallEvent | null } {
   if (!bot.isAlive) return { next: bot, event: null };
 
@@ -112,8 +114,8 @@ export function applyBotCommand(
   let ny = bot.position.y + dir.y * vel;
 
   let wallEvent: HitWallEvent | null = null;
-  const xClamped = clamp(nx, BOT_RADIUS, ARENA_WIDTH - BOT_RADIUS);
-  const yClamped = clamp(ny, BOT_RADIUS, ARENA_HEIGHT - BOT_RADIUS);
+  const xClamped = clamp(nx, BOT_RADIUS, arenaW - BOT_RADIUS);
+  const yClamped = clamp(ny, BOT_RADIUS, arenaH - BOT_RADIUS);
   if (xClamped !== nx || yClamped !== ny) {
     wallEvent = { type: "hitWall", botId: bot.id, damage: 0 };
     vel = 0;
@@ -281,7 +283,7 @@ export function regenShields(bots: readonly BotState[]): BotState[] {
 
 // ─── Bot-bot collision ────────────────────────────────────────────────────────
 
-export function resolveBotCollisions(bots: BotState[]): {
+export function resolveBotCollisions(bots: BotState[], arenaW: number = ARENA_WIDTH, arenaH: number = ARENA_HEIGHT): {
   bots: BotState[];
   events: BotCollisionEvent[];
 } {
@@ -308,8 +310,8 @@ export function resolveBotCollisions(bots: BotState[]): {
       result[i] = {
         ...a,
         position: {
-          x: clamp(a.position.x + (ax * overlap) / 2, BOT_RADIUS, ARENA_WIDTH - BOT_RADIUS),
-          y: clamp(a.position.y + (ay * overlap) / 2, BOT_RADIUS, ARENA_HEIGHT - BOT_RADIUS),
+          x: clamp(a.position.x + (ax * overlap) / 2, BOT_RADIUS, arenaW - BOT_RADIUS),
+          y: clamp(a.position.y + (ay * overlap) / 2, BOT_RADIUS, arenaH - BOT_RADIUS),
         },
         velocity: 0,
         energy: a.energy - damageB,
@@ -317,8 +319,8 @@ export function resolveBotCollisions(bots: BotState[]): {
       result[j] = {
         ...b,
         position: {
-          x: clamp(b.position.x - (ax * overlap) / 2, BOT_RADIUS, ARENA_WIDTH - BOT_RADIUS),
-          y: clamp(b.position.y - (ay * overlap) / 2, BOT_RADIUS, ARENA_HEIGHT - BOT_RADIUS),
+          x: clamp(b.position.x - (ax * overlap) / 2, BOT_RADIUS, arenaW - BOT_RADIUS),
+          y: clamp(b.position.y - (ay * overlap) / 2, BOT_RADIUS, arenaH - BOT_RADIUS),
         },
         velocity: 0,
         energy: b.energy - damageA,

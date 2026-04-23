@@ -45,6 +45,7 @@ export function DocsPanel({ open, onClose }: Props) {
             ["shield",         "number",  "Absorbs bullet damage first (max 20). Regenerates after ~5s without being hit."],
             ["velocity",       "number",  "Current speed in units/tick. Negative = reversing."],
             ["gunHeat",        "number",  "Cooldown before next shot. Fires when 0; cools at 0.1/tick."],
+            ["tick",           "number",  "Current game tick (starts at 0, increments every 1/30s)."],
             ["arenaWidth",     "number",  "Arena width in pixels (1200)."],
             ["arenaHeight",    "number",  "Arena height in pixels (900)."],
             ["obstacles",      "array",   "Array of convex polygons (each a Vec2[] array). Bullets and LOS are blocked by these."],
@@ -105,6 +106,7 @@ while (this.remainingAhead > 0 || this.remainingTurn > 0) {
 }`}</Code>
           <Table rows={[
             ["setAhead(d) / setBack(d)",      "void", "Queue forward/backward travel."],
+            ["setMove(d)",                    "void", "Queue travel; positive = forward, negative = backward."],
             ["setTurn(deg)",                  "void", "Queue body rotation (positive = clockwise)."],
             ["setTurnLeft/Right(deg)",        "void", "Convenience wrappers for counter/clockwise."],
             ["setTurnGun(deg)",               "void", "Queue gun rotation."],
@@ -144,16 +146,23 @@ while (this.remainingAhead > 0 || this.remainingTurn > 0) {
         </Section>
 
         <Section title="Event callbacks — Style B">
-          <P>Override these methods for event-driven logic. They can be async — <C>run()</C> waits while a callback is executing.</P>
+          <P>Override these methods for event-driven logic. Only add <C>async</C> if you actually use <C>await</C> inside — otherwise the runtime skips a tick waiting for the handler to settle.</P>
           <Code>{`async onHitByBullet(e) {
   // e.damage, e.ownerId, e.bulletId
   await this.turn(90 + Math.random() * 90);
   await this.move(100);
 }
-async onHitWall(e) { await this.turn(135); }
-async onBulletHit(e) { /* your bullet hit e.victimId */ }
+onHitWall(e)      { this.direction *= -1; }   // sync: no await needed
 async onBotCollision(e) { await this.back(50); }
+async onBulletHit(e) { /* your bullet hit e.victimId */ }
 onDeath() { /* clean-up or logging */ }`}</Code>
+          <Table rows={[
+            ["onHitWall(e)",       "e: HitWallEvent",       "This bot hit an arena wall. e has no extra fields."],
+            ["onHitByBullet(e)",   "e: HitByBulletEvent",   "This bot was struck. e.damage, e.ownerId, e.bulletId."],
+            ["onBulletHit(e)",     "e: BulletHitEvent",     "This bot's bullet hit an enemy. e.victimId, e.bulletId."],
+            ["onBotCollision(e)",  "e: BotCollisionEvent",  "Rammed another bot (or was rammed). e.otherId."],
+            ["onDeath()",          "—",                     "This bot was eliminated. Cannot await — bot is already dead."],
+          ]} />
         </Section>
 
         <Section title="Heading system">
@@ -176,7 +185,7 @@ if (enemy) {
             ["Max gun turn",        "20°/tick",       "Gun rotates up to twice as fast as the body."],
             ["Gun cooling rate",    "0.1/tick",       "~10 ticks between shots at default power."],
             ["Bullet speed",        "26 − 3×power",   "Power 1.0 → 23 u/tick. Power 3.0 → 17 u/tick."],
-            ["Bullet damage",       "6×power",        "Power 1.0 → 6 HP. Power 3.0 → 18 HP."],
+            ["Bullet damage",       "8×power",        "Power 1.0 → 8 HP. Power 3.0 → 24 HP."],
             ["Shield max",          "20 HP",          "Absorbs bullets first; bypassed by ram damage."],
             ["Shield regen delay",  "~5s (150 ticks)","Regen starts only after 5s without being hit."],
             ["Ticks per second",    "30",             "One tick = ~33ms."],

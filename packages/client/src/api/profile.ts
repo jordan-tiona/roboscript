@@ -18,3 +18,13 @@ export async function resetTutorial(): Promise<void> {
   });
   if (!res.ok) throw new Error("Failed to reset tutorial");
 }
+
+export async function advanceChallenge(): Promise<number> {
+  const res = await fetch("/api/profile/advance-challenge", {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to advance challenge");
+  const data = await res.json();
+  return (data as { challengeIndex: number }).challengeIndex;
+}

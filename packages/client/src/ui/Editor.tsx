@@ -1,7 +1,9 @@
 import { useEffect, useRef } from "react";
 import { EditorView, basicSetup } from "codemirror";
+import { keymap } from "@codemirror/view";
 import { javascript } from "@codemirror/lang-javascript";
 import { oneDark } from "@codemirror/theme-one-dark";
+import { indentMore, indentLess } from "@codemirror/commands";
 
 interface Props {
   initialCode: string;
@@ -21,6 +23,10 @@ export function Editor({ initialCode, onChange }: Props) {
         basicSetup,
         javascript(),
         oneDark,
+        keymap.of([
+          { key: "Tab", run: indentMore },
+          { key: "Shift-Tab", run: indentLess },
+        ]),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) onChange(update.state.doc.toString());
         }),

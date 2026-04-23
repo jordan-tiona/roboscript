@@ -46,6 +46,8 @@ export interface GameState {
   readonly isOver: boolean;
   readonly winnerId: string | null;
   readonly nextBulletId: number;
+  readonly arenaWidth: number;
+  readonly arenaHeight: number;
 }
 
 // ─── Commands ─────────────────────────────────────────────────────────────────
