@@ -1,6 +1,7 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { SettingsDrawer } from "../ui/SettingsDrawer.js";
+import { DocsPanel } from "../ui/DocsPanel.js";
 import { Editor } from "../ui/Editor.js";
 import { Arena } from "../ui/Arena.js";
 import type { ArenaHandle } from "../ui/Arena.js";
@@ -61,7 +62,11 @@ export function DashboardPage() {
   const { user, signOut } = useAuth();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [panelWidth, setPanelWidth] = useState(420);
+  const [docsOpen, setDocsOpen] = useState(false);
+  const [panelWidth, setPanelWidth] = useState(() => {
+    const saved = localStorage.getItem("editorPanelWidth");
+    return saved ? Math.max(280, Math.min(700, Number(saved))) : 420;
+  });
   const dragging = useRef(false);
   const dragStart = useRef({ x: 0, width: 0 });
 
@@ -79,6 +84,7 @@ export function DashboardPage() {
       dragging.current = false;
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
+      setPanelWidth(w => { localStorage.setItem("editorPanelWidth", String(w)); return w; });
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -260,7 +266,7 @@ export function DashboardPage() {
       />
 
       {/* Right panel: arena + log */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "12px", padding: "16px", overflow: "hidden", minHeight: 0 }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "12px", padding: "16px", overflow: "hidden", minHeight: 0, position: "relative" }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", gap: "16px", fontFamily: "monospace", fontSize: "13px", color: "#555", flexShrink: 0 }}>
           <span>RoboScript — JS Battle Arena</span>
@@ -271,6 +277,12 @@ export function DashboardPage() {
                 style={{ background: "transparent", border: "none", color: "#666", fontFamily: "monospace", fontSize: "12px", cursor: "pointer", padding: 0 }}
               >
                 {user.name}
+              </button>
+              <button
+                onClick={() => setDocsOpen(o => !o)}
+                style={{ background: "transparent", border: "1px solid #2a2a4e", borderRadius: "3px", color: docsOpen ? "#9090e0" : "#555", fontFamily: "monospace", fontSize: "11px", padding: "2px 8px", cursor: "pointer" }}
+              >
+                docs
               </button>
               <button
                 onClick={handleSignOut}
@@ -287,6 +299,7 @@ export function DashboardPage() {
           <Arena ref={arenaRef} />
         </div>
         <LogPanel entries={logs} onClear={() => setLogs([])} />
+        <DocsPanel open={docsOpen} onClose={() => setDocsOpen(false)} />
       </div>
     </div>
   );
