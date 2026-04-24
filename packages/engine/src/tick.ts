@@ -22,8 +22,9 @@ export function tick(state: GameState, commands: readonly BotCommand[]): GameSta
 
   // 1. Movement, rotation, wall collision
   let bots: BotState[] = state.bots.map((bot) => {
-    const { next, event } = applyBotCommand(bot, cmdMap.get(bot.id), state.obstacles, arenaW, arenaH);
-    if (event) events.push(event);
+    const { next, wallEvent, obstacleEvent } = applyBotCommand(bot, cmdMap.get(bot.id), state.obstacles, arenaW, arenaH);
+    if (wallEvent) events.push(wallEvent);
+    if (obstacleEvent) events.push(obstacleEvent);
     return next;
   });
 
@@ -182,6 +183,10 @@ export interface BuildOptions {
   arenaWidth?: number;
   arenaHeight?: number;
   obstacles?: boolean;
+  /** Override spawn position for specific bot indices; null entries use random placement. */
+  spawnPositions?: (Vec2 | null)[];
+  /** Supply specific obstacle polygons instead of randomly generating them. */
+  fixedObstacles?: Polygon[];
 }
 
 export function buildInitialState(
@@ -192,8 +197,9 @@ export function buildInitialState(
   const arenaH = options.arenaHeight ?? ARENA_HEIGHT;
   const withObstacles = options.obstacles !== false;
 
-  const obstacles = withObstacles ? generateObstacles(arenaW, arenaH) : [];
-  const positions = generateSpawnPositions(botDefs.length, arenaW, arenaH);
+  const obstacles = options.fixedObstacles ?? (withObstacles ? generateObstacles(arenaW, arenaH) : []);
+  const randomPositions = generateSpawnPositions(botDefs.length, arenaW, arenaH);
+  const positions = randomPositions.map((p, i) => options.spawnPositions?.[i] ?? p);
 
   const bots: BotState[] = botDefs.map((def, i) => ({
     id: def.id,

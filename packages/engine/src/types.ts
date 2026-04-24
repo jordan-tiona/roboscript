@@ -68,6 +68,7 @@ export interface BotCommand {
 export type GameEvent =
   | HitByBulletEvent
   | HitWallEvent
+  | HitObstacleEvent
   | BotCollisionEvent
   | BulletHitEvent
   | BotDeathEvent
@@ -87,6 +88,11 @@ export interface HitWallEvent {
   readonly type: "hitWall";
   readonly botId: string;
   readonly damage: number;
+}
+
+export interface HitObstacleEvent {
+  readonly type: "hitObstacle";
+  readonly botId: string;
 }
 
 export interface BotCollisionEvent {

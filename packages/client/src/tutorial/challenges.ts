@@ -9,7 +9,7 @@ import sprinterCode    from "../bots/code/tutorial/sprinter.js?raw";
 import sniperCode      from "../bots/code/tutorial/sniper.js?raw";
 
 import d1Code from "../bots/code/tutorial/demo/d1_mover.js?raw";
-import d2Code from "../bots/code/tutorial/demo/d2_circler.js?raw";
+import d2Code from "../bots/code/tutorial/demo/d2_waltzer.js?raw";
 import d3Code from "../bots/code/tutorial/demo/d3_random.js?raw";
 import d5Code from "../bots/code/tutorial/demo/d5_stepper.js?raw";
 import d6Code from "../bots/code/tutorial/demo/d6_survivor.js?raw";
@@ -27,8 +27,8 @@ export interface Challenge {
   withObstacles?: boolean;
 }
 
-export const DEMO_ARENA = { arenaWidth: 600, arenaHeight: 450, obstacles: false } as const;
-export const DEMO_ARENA_OBS = { arenaWidth: 600, arenaHeight: 450, obstacles: true } as const;
+export const DEMO_ARENA = { arenaWidth: 400, arenaHeight: 300, obstacles: false } as const;
+export const DEMO_ARENA_OBS = { arenaWidth: 400, arenaHeight: 300, obstacles: true } as const;
 
 export const CHALLENGES: Challenge[] = [
   {
@@ -80,31 +80,6 @@ export const CHALLENGES: Challenge[] = [
   },
   {
     index: 2,
-    title: "Move unpredictably",
-    blurb: "The Predictor is stationary but uses linear shot prediction — " +
-      "if you move at a constant speed in a straight line, its bullets will hit you. " +
-      "Randomizing your movement distance and turn angle makes you nearly impossible to hit.",
-    snippet:
-`async run() {
-  while (true) {
-    // vary distance and angle so your path is unpredictable
-    await this.move(30 + Math.random() * 80);
-    await this.turn((Math.random() - 0.5) * 160);
-    const target = this.enemies.find(e => e.visible && e.alive);
-    if (target) {
-      await this.aimToward(target);
-      if (this.gunHeat === 0) await this.fire(1.5);
-    }
-  }
-}`,
-    opponent: { id: "opp-2", name: "Predictor", code: predictorCode },
-    demo: {
-      player:   { id: "demo-p", name: "You", code: d3Code },
-      opponent: { id: "demo-o", name: "Predictor", code: predictorCode },
-    },
-  },
-  {
-    index: 3,
     title: "Do two things at once",
     blurb: "The Duelist charges you — if you stop moving to aim, it closes the gap and rams you. " +
       "step() lets you turn, move, and fire all in the same tick. " +
@@ -124,10 +99,37 @@ export const CHALLENGES: Challenge[] = [
     });
   }
 }`,
-    opponent: { id: "opp-3", name: "Duelist", code: duelistCode },
+    opponent: { id: "opp-2", name: "Duelist", code: duelistCode },
     demo: {
       player:   { id: "demo-p", name: "You", code: d5Code },
       opponent: { id: "demo-o", name: "Duelist", code: duelistCode },
+    },
+  },
+  {
+    index: 3,
+    title: "Move unpredictably",
+    blurb: "The Predictor is stationary but uses linear shot prediction — " +
+      "if you move at a constant speed in a straight line, its bullets will hit you. " +
+      "Randomizing your movement distance and turn angle makes you nearly impossible to hit.",
+    snippet:
+`async run() {
+  while (true) {
+    const target = this.enemies.find(e => e.alive);
+    if (!target) { await this.step({ velocity: 6, turn: 10 }); continue; }
+
+    await this.step({
+      velocity: 2 + Math.random() * 6, // random speed — breaks prediction
+      turn: this.bearingTo(target) + 60,
+      gunTurn: this.gunBearingTo(target),
+      fire: this.gunHeat === 0,
+      firePower: 1.5,
+    });
+  }
+}`,
+    opponent: { id: "opp-3", name: "Predictor", code: predictorCode },
+    demo: {
+      player:   { id: "demo-p", name: "You", code: d3Code },
+      opponent: { id: "demo-o", name: "Predictor", code: predictorCode },
     },
   },
   {
@@ -139,15 +141,13 @@ export const CHALLENGES: Challenge[] = [
     snippet:
 `async run() {
   while (true) {
-    const alive = this.enemies.filter(e => e.alive);
-    // target the nearest threat
-    const target = alive.sort((a, b) =>
-      this.distanceTo(a) - this.distanceTo(b)
-    )[0];
-    if (!target) { await this.step({ velocity: 6, turn: 8 }); continue; }
+    const target = this.enemies
+      .filter(e => e.alive)
+      .sort((a, b) => this.distanceTo(a) - this.distanceTo(b))[0];
+    if (!target) { await this.step({ velocity: 2 + Math.random() * 6, turn: 8 }); continue; }
 
     await this.step({
-      velocity: 7,
+      velocity: 2 + Math.random() * 6, // stay unpredictable under fire
       turn: this.bearingTo(target) + 50,
       gunTurn: this.gunBearingTo(target),
       fire: this.gunHeat === 0,
@@ -197,26 +197,32 @@ export const CHALLENGES: Challenge[] = [
   {
     index: 6,
     title: "Use the terrain",
-    blurb: "The Sniper keeps its distance and fires maximum-power shots — one hit takes off " +
-      "your entire shield and a chunk of your energy. Obstacles block both bullets and line of sight. " +
-      "Position yourself behind cover and only expose yourself to fire when you have a clear shot.",
+    blurb: "The Sniper keeps its distance and fires maximum-power shots that can strip your shield in one hit. " +
+      "Obstacles block both bullets and line of sight — use that to your advantage. " +
+      "When you lose sight of an opponent, orbiting the nearest obstacle will often bring them back into view.",
     snippet:
 `async run() {
   while (true) {
     const target = this.enemies.find(e => e.alive);
-    const obs = this.obstacles[0];
-    if (obs) {
-      const cx = obs.reduce((s, v) => s + v.x, 0) / obs.length;
-      const cy = obs.reduce((s, v) => s + v.y, 0) / obs.length;
-      const coverDist = this.distanceTo({ x: cx, y: cy });
+
+    if (target?.visible) {
+      const correction = (this.distanceTo(target) - 120) / 5;
       await this.step({
-        velocity: coverDist > 60 ? 6 : 0,
-        turn: coverDist > 60
-          ? this.bearingTo({ x: cx, y: cy })
-          : this.bearingTo(target ?? { x: cx, y: cy }),
-        gunTurn: target ? this.gunBearingTo(target) : 0,
-        fire: target?.visible && this.gunHeat === 0,
+        velocity: 2 + Math.random() * 4,
+        turn: this.bearingTo(target) - 90 + correction,
+        gunTurn: this.gunBearingTo(target),
+        fire: this.gunHeat === 0,
         firePower: 2,
+      });
+    } else {
+      // lost sight — orbit the nearest obstacle to peek around it
+      const obs = this.obstacles
+        .map(o => ({ x: o.reduce((s,v) => s+v.x,0)/o.length,
+                     y: o.reduce((s,v) => s+v.y,0)/o.length }))
+        .sort((a, b) => this.distanceTo(a) - this.distanceTo(b))[0];
+      if (obs) await this.step({
+        velocity: 5,
+        turn: this.bearingTo(obs) - 90 + (this.distanceTo(obs) - 80) / 5,
       });
     }
   }

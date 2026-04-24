@@ -17,8 +17,11 @@ export class GameLoop {
   private onGameOver: ((winnerId: string | null) => void) | null = null;
   private countdown: number | null = null;
 
-  constructor(canvas: HTMLCanvasElement, bots: BotEntry[], onGameOver?: (winnerId: string | null) => void, onLog?: LogCallback, arenaOptions?: BuildOptions) {
+  private noCountdown: boolean;
+
+  constructor(canvas: HTMLCanvasElement, bots: BotEntry[], onGameOver?: (winnerId: string | null) => void, onLog?: LogCallback, arenaOptions?: BuildOptions, noCountdown = false) {
     this.onGameOver = onGameOver ?? null;
+    this.noCountdown = noCountdown;
     this.driver = new GameDriver(bots, onLog, arenaOptions);
     this.canvas = canvas;
     const arenaW = arenaOptions?.arenaWidth  ?? ARENA_WIDTH;
@@ -26,6 +29,7 @@ export class GameLoop {
     this.canvas.width  = arenaW + CANVAS_PADDING * 2;
     this.canvas.height = arenaH + CANVAS_PADDING * 2;
     this.ctx = canvas.getContext("2d")!;
+    renderFrame(this.ctx, this.driver.getState(), this.canvas.width, this.canvas.height);
   }
 
   async start(bots: BotEntry[]): Promise<void> {
@@ -48,11 +52,13 @@ export class GameLoop {
     this.rafId = requestAnimationFrame(frame);
 
     // Countdown: 3 → 2 → 1, one second each
-    for (let i = 3; i >= 1; i--) {
-      this.countdown = i;
-      await new Promise<void>((resolve) => setTimeout(resolve, 1000));
+    if (!this.noCountdown) {
+      for (let i = 3; i >= 1; i--) {
+        this.countdown = i;
+        await new Promise<void>((resolve) => setTimeout(resolve, 1000));
+      }
+      this.countdown = null;
     }
-    this.countdown = null;
 
     // Game tick loop — fixed rate
     this.tickTimer = setInterval(() => {

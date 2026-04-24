@@ -9,6 +9,7 @@ import {
 import type {
   HitByBulletEvent,
   HitWallEvent,
+  HitObstacleEvent,
   BotCollisionEvent,
   BulletHitEvent,
 } from "@roboscript/engine";
@@ -101,6 +102,8 @@ export class RobotRuntime {
   bulletHit: BulletHitEvent | null = null;
   /** Set if this bot collided with another bot this tick; null otherwise. */
   botCollision: BotCollisionEvent | null = null;
+  /** Set if this bot hit an obstacle this tick; null otherwise. */
+  hitObstacle: HitObstacleEvent | null = null;
 
   // ── Readable state properties ─────────────────────────────────────────────
   get x() { return this._state.x; }
@@ -172,11 +175,13 @@ export class RobotRuntime {
     this.hitByBullet = null;
     this.bulletHit = null;
     this.botCollision = null;
+    this.hitObstacle = null;
     for (const e of events) {
       if (e.type === "hitWall") this.hitWall = e;
       else if (e.type === "hitByBullet") this.hitByBullet = e;
       else if (e.type === "bulletHit") this.bulletHit = e;
       else if (e.type === "botCollision") this.botCollision = e;
+      else if (e.type === "hitObstacle") this.hitObstacle = e;
     }
 
     // If handlers are mid-execution, give them this tick and hold main
@@ -192,8 +197,9 @@ export class RobotRuntime {
         let result: void | Promise<void>;
         this._activeHandlerCount++;
         if (e.type === "hitByBullet")    result = this.onHitByBullet(e);
-        else if (e.type === "hitWall")   result = this.onHitWall(e);
-        else if (e.type === "bulletHit") result = this.onBulletHit(e);
+        else if (e.type === "hitWall")      result = this.onHitWall(e);
+        else if (e.type === "hitObstacle")  result = this.onHitObstacle(e);
+        else if (e.type === "bulletHit")    result = this.onBulletHit(e);
         else if (e.type === "botCollision") result = this.onBotCollision(e);
         else if (e.type === "botDeath")   { this._activeHandlerCount--; this.onDeath(); continue; }
         else { this._activeHandlerCount--; continue; }
@@ -549,6 +555,7 @@ export class RobotRuntime {
 
   onHitByBullet(_e: HitByBulletEvent): void | Promise<void> {}
   onHitWall(_e: HitWallEvent): void | Promise<void> {}
+  onHitObstacle(_e: HitObstacleEvent): void | Promise<void> {}
   onBulletHit(_e: BulletHitEvent): void | Promise<void> {}
   onBotCollision(_e: BotCollisionEvent): void | Promise<void> {}
   onDeath(): void {}

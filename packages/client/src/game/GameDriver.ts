@@ -173,6 +173,7 @@ export class GameDriver {
       const botEvents = this.state.events.filter((e) => {
         if (e.type === "hitByBullet") return e.victimId === bot.id;
         if (e.type === "hitWall") return e.botId === bot.id;
+        if (e.type === "hitObstacle") return e.botId === bot.id;
         if (e.type === "bulletHit") return e.ownerId === bot.id;
         if (e.type === "botDeath") return e.botId === bot.id;
         if (e.type === "bulletMissed") return e.ownerId === bot.id;

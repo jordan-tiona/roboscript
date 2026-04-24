@@ -15,7 +15,7 @@ export function ChallengeIntro({ challenge, open, onClose, onStart }: Props) {
       position: "absolute", inset: 0,
       zIndex: 20,
       background: "var(--color-bg)",
-      display: "flex", alignItems: "center", justifyContent: "center",
+      display: "flex", alignItems: "flex-start", justifyContent: "center",
       opacity: open ? 1 : 0,
       pointerEvents: open ? "auto" : "none",
       transition: "opacity 0.2s ease",

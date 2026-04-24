@@ -3,6 +3,7 @@ import type {
   BulletState,
   BotCommand,
   HitWallEvent,
+  HitObstacleEvent,
   HitByBulletEvent,
   BotCollisionEvent,
   BulletHitEvent,
@@ -95,8 +96,8 @@ export function applyBotCommand(
   obstacles: readonly Polygon[],
   arenaW: number = ARENA_WIDTH,
   arenaH: number = ARENA_HEIGHT,
-): { next: BotState; event: HitWallEvent | null } {
-  if (!bot.isAlive) return { next: bot, event: null };
+): { next: BotState; wallEvent: HitWallEvent | null; obstacleEvent: HitObstacleEvent | null } {
+  if (!bot.isAlive) return { next: bot, wallEvent: null, obstacleEvent: null };
 
   const dBody = clamp(cmd?.turnDegrees    ?? 0, -MAX_TURN_RATE,     MAX_TURN_RATE);
   const dGun  = clamp(cmd?.turnGunDegrees ?? 0, -MAX_GUN_TURN_RATE, MAX_GUN_TURN_RATE);
@@ -104,10 +105,10 @@ export function applyBotCommand(
   const newGunHeading = normalizeAngle(bot.gunHeading + dGun);
 
   // Velocity with acceleration/deceleration limits
-  const desired = clamp(cmd?.desiredVelocity ?? bot.velocity, -MAX_SPEED, MAX_SPEED);
+  const desired = clamp(cmd?.desiredVelocity ?? 0, -MAX_SPEED, MAX_SPEED);
   let vel = bot.velocity;
-  if (desired > vel) vel = Math.min(desired, vel + ACCELERATION);
-  else if (desired < vel) vel = Math.max(desired, vel - DECELERATION);
+  if (desired > vel) vel = Math.min(desired, vel + (vel < 0 ? DECELERATION : ACCELERATION));
+  else if (desired < vel) vel = Math.max(desired, vel - (vel > 0 ? DECELERATION : ACCELERATION));
 
   const dir = headingToVec(newHeading);
   let nx = bot.position.x + dir.x * vel;
@@ -124,8 +125,10 @@ export function applyBotCommand(
   }
 
   // Obstacle collision — revert to pre-move position on overlap
+  let obstacleEvent: HitObstacleEvent | null = null;
   for (const obs of obstacles) {
     if (circleIntersectsPolygon(nx, ny, BOT_RADIUS, obs)) {
+      obstacleEvent = { type: "hitObstacle", botId: bot.id };
       vel = 0;
       nx = bot.position.x;
       ny = bot.position.y;
@@ -145,7 +148,7 @@ export function applyBotCommand(
     energy: bot.energy,
   };
 
-  return { next, event: wallEvent };
+  return { next, wallEvent, obstacleEvent };
 }
 
 // ─── Bullet creation ──────────────────────────────────────────────────────────

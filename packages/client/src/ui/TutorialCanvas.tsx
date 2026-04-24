@@ -11,28 +11,57 @@ interface Props {
   withObstacles?: boolean;
 }
 
-// Show a cropped, slightly zoomed-out view of the arena center.
-const SCALE = 0.85;
-
 export const DISPLAY_W = 400;
 export const DISPLAY_H = 300;
 
+const DEMO_RESET_MS = 5000;
+
 export function TutorialCanvas({ player, opponent, extraOpponents = [], withObstacles = false }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const loopRef   = useRef<GameLoop | null>(null);
-  const aliveRef  = useRef(true);
+  const canvasRef  = useRef<HTMLCanvasElement>(null);
+  const loopRef    = useRef<GameLoop | null>(null);
+  const timerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const aliveRef   = useRef(true);
 
   useEffect(() => {
     aliveRef.current = true;
 
+    function stop() {
+      if (timerRef.current !== null) { clearTimeout(timerRef.current); timerRef.current = null; }
+      loopRef.current?.stop();
+      loopRef.current = null;
+    }
+
     async function runGame() {
       if (!aliveRef.current || !canvasRef.current) return;
       const bots = [player, opponent, ...extraOpponents];
-      const arenaOpts = { ...DEMO_ARENA, obstacles: withObstacles };
-      const loop = new GameLoop(canvasRef.current, bots, () => {
-        if (aliveRef.current) setTimeout(runGame, 2000);
-      }, undefined, arenaOpts);
+      const aw = DEMO_ARENA.arenaWidth;
+      const ah = DEMO_ARENA.arenaHeight;
+      // Spread bots: player at 25% x, opponent at 75% x, extras stacked at 75% x top/bottom
+      const spawnPositions = [
+        { x: aw * 0.25, y: ah * 0.5  },
+        { x: aw * 0.75, y: ah * 0.5  },
+        { x: aw * 0.75, y: ah * 0.25 },
+        { x: aw * 0.25, y: ah * 0.75 },
+      ].slice(0, bots.length);
+
+      // For the obstacles demo: one small fixed obstacle between the two bots
+      const fixedObstacles = withObstacles ? [[
+        { x: aw * 0.5 - 30, y: ah * 0.5 - 40 },
+        { x: aw * 0.5 + 30, y: ah * 0.5 - 40 },
+        { x: aw * 0.5 + 40, y: ah * 0.5      },
+        { x: aw * 0.5 + 30, y: ah * 0.5 + 40 },
+        { x: aw * 0.5 - 30, y: ah * 0.5 + 40 },
+        { x: aw * 0.5 - 40, y: ah * 0.5      },
+      ]] : undefined;
+      const arenaOpts = { ...DEMO_ARENA, obstacles: withObstacles, spawnPositions, fixedObstacles };
+      const loop = new GameLoop(canvasRef.current, bots, undefined, undefined, arenaOpts, true);
       loopRef.current = loop;
+
+      timerRef.current = setTimeout(() => {
+        stop();
+        if (aliveRef.current) runGame();
+      }, DEMO_RESET_MS);
+
       await loop.start(bots);
     }
 
@@ -40,28 +69,21 @@ export function TutorialCanvas({ player, opponent, extraOpponents = [], withObst
 
     return () => {
       aliveRef.current = false;
-      loopRef.current?.stop();
-      loopRef.current = null;
+      stop();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Canvas buffer is set by GameLoop to (arenaW + padding*2) × (arenaH + padding*2).
-  // Scale down and offset so only the center portion of the arena is visible —
-  // bots have room to roam the full arena without the edges being on-screen.
-  const logicalW = DEMO_ARENA.arenaWidth  + CANVAS_PADDING * 2;
-  const logicalH = DEMO_ARENA.arenaHeight + CANVAS_PADDING * 2;
-  const cssW = logicalW * SCALE;
-  const cssH = logicalH * SCALE;
-  // Align the arena center to the display center
-  const marginLeft = DISPLAY_W / 2 - (CANVAS_PADDING + DEMO_ARENA.arenaWidth  / 2) * SCALE;
-  const marginTop  = DISPLAY_H / 2 - (CANVAS_PADDING + DEMO_ARENA.arenaHeight / 2) * SCALE;
+  // 1:1 rendering — canvas buffer is (arenaW + padding*2) × (arenaH + padding*2).
+  // Negative margins clip the padding so only the arena itself is visible.
+  const marginLeft = -CANVAS_PADDING;
+  const marginTop  = -CANVAS_PADDING;
 
   return (
     <div style={{ width: DISPLAY_W, height: DISPLAY_H, overflow: "hidden", borderRadius: "var(--radius-sm)", border: "1px solid var(--color-border)", flexShrink: 0 }}>
       <canvas
         ref={canvasRef}
-        style={{ display: "block", width: cssW, height: cssH, marginLeft, marginTop }}
+        style={{ display: "block", marginLeft, marginTop }}
       />
     </div>
   );
