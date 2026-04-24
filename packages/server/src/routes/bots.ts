@@ -1,12 +1,10 @@
 import { Hono } from "hono";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { botSlots } from "../db/schema.js";
+import { botSaves } from "../db/schema.js";
 import { auth } from "../auth.js";
 
 type Env = { Variables: { userId: string } };
-
-const MAX_SLOTS = 5;
 
 export const botsRouter = new Hono<Env>();
 
@@ -17,41 +15,66 @@ botsRouter.use("*", async (c, next) => {
   await next();
 });
 
-// Return all 5 slots; unset slots come back with empty defaults.
 botsRouter.get("/", async (c) => {
   const userId = c.get("userId");
-  const rows = await db.select().from(botSlots).where(eq(botSlots.userId, userId));
-
-  const slots = Array.from({ length: MAX_SLOTS }, (_, i) => {
-    const row = rows.find((r) => r.slotIndex === i);
-    return row
-      ? { slotIndex: i, name: row.name, code: row.code, updatedAt: row.updatedAt }
-      : { slotIndex: i, name: `Bot ${i + 1}`, code: "", updatedAt: null };
-  });
-
-  return c.json(slots);
+  const rows = await db
+    .select({ id: botSaves.id, name: botSaves.name, createdAt: botSaves.createdAt, updatedAt: botSaves.updatedAt })
+    .from(botSaves)
+    .where(eq(botSaves.userId, userId))
+    .orderBy(botSaves.updatedAt);
+  return c.json(rows);
 });
 
-// Upsert a single slot by index (0–4).
-botsRouter.put("/:index", async (c) => {
+botsRouter.get("/:id", async (c) => {
   const userId = c.get("userId");
-  const index = Number(c.req.param("index"));
+  const id = c.req.param("id");
+  const [row] = await db.select().from(botSaves).where(and(eq(botSaves.id, id), eq(botSaves.userId, userId)));
+  if (!row) return c.json({ error: "Not found" }, 404);
+  return c.json(row);
+});
 
-  if (!Number.isInteger(index) || index < 0 || index >= MAX_SLOTS) {
-    return c.json({ error: "Slot index must be 0–4" }, 400);
-  }
-
+botsRouter.post("/", async (c) => {
+  const userId = c.get("userId");
   const body = await c.req.json<{ name?: string; code?: string }>();
-  const name = typeof body.name === "string" ? body.name.slice(0, 50) : `Bot ${index + 1}`;
+  const name = typeof body.name === "string" ? body.name.slice(0, 100) : "Bot";
   const code = typeof body.code === "string" ? body.code : "";
 
-  await db
-    .insert(botSlots)
-    .values({ userId, slotIndex: index, name, code, updatedAt: new Date() })
-    .onConflictDoUpdate({
-      target: [botSlots.userId, botSlots.slotIndex],
-      set: { name, code, updatedAt: new Date() },
-    });
+  const [row] = await db
+    .insert(botSaves)
+    .values({ userId, name, code })
+    .returning({ id: botSaves.id });
 
+  return c.json({ id: row!.id }, 201);
+});
+
+botsRouter.put("/:id", async (c) => {
+  const userId = c.get("userId");
+  const id = c.req.param("id");
+  const body = await c.req.json<{ name?: string; code?: string }>();
+  const updates: Partial<typeof botSaves.$inferInsert> = { updatedAt: new Date() };
+
+  if (typeof body.name === "string") updates.name = body.name.slice(0, 100);
+  if (typeof body.code === "string") updates.code = body.code;
+
+  const rows = await db
+    .update(botSaves)
+    .set(updates)
+    .where(and(eq(botSaves.id, id), eq(botSaves.userId, userId)))
+    .returning({ id: botSaves.id });
+
+  if (rows.length === 0) return c.json({ error: "Not found" }, 404);
+  return c.json({ ok: true });
+});
+
+botsRouter.delete("/:id", async (c) => {
+  const userId = c.get("userId");
+  const id = c.req.param("id");
+
+  const rows = await db
+    .delete(botSaves)
+    .where(and(eq(botSaves.id, id), eq(botSaves.userId, userId)))
+    .returning({ id: botSaves.id });
+
+  if (rows.length === 0) return c.json({ error: "Not found" }, 404);
   return c.json({ ok: true });
 });

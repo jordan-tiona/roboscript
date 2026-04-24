@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { SettingsDrawer } from "../ui/SettingsDrawer.js";
 import { DocsPanel } from "../ui/DocsPanel.js";
 import { ChallengeIntro } from "../ui/ChallengeIntro.js";
+import { SavesPanel } from "../ui/SavesPanel.js";
+import { BattleConfig, EXAMPLE_BOTS } from "../ui/BattleConfig.js";
 import { Editor } from "../ui/Editor.js";
 import { Arena } from "../ui/Arena.js";
 import type { ArenaHandle } from "../ui/Arena.js";
@@ -33,9 +35,10 @@ export function DashboardPage() {
   const { user, signOut } = useAuth();
 
   // ── UI state ────────────────────────────────────────────────────────────────
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [docsOpen, setDocsOpen]         = useState(false);
-  const [introOpen, setIntroOpen]       = useState(false);
+  const [settingsOpen, setSettingsOpen]   = useState(false);
+  const [docsOpen, setDocsOpen]           = useState(false);
+  const [introOpen, setIntroOpen]         = useState(false);
+  const [savesOpen, setSavesOpen]         = useState(false);
   const [panelWidth, setPanelWidth] = useState(() => {
     const saved = localStorage.getItem("editorPanelWidth");
     return saved ? Math.max(280, Math.min(700, Number(saved))) : 420;
@@ -48,10 +51,9 @@ export function DashboardPage() {
     getProfile()
       .then((p) => {
         setChallengeIndex(p.challengeIndex);
-        // Show intro on first load if still in tutorial
         if (p.challengeIndex < CHALLENGE_COUNT) setIntroOpen(true);
       })
-      .catch(() => setChallengeIndex(CHALLENGE_COUNT)); // default to free play on error
+      .catch(() => setChallengeIndex(CHALLENGE_COUNT));
   }, []);
 
   const inTutorial = challengeIndex !== null && challengeIndex < CHALLENGE_COUNT;
@@ -63,10 +65,16 @@ export function DashboardPage() {
   const [running, setRunning]       = useState(false);
   const [resetKey, setResetKey]     = useState(0);
   const [logs, setLogs]             = useState<LogEntry[]>([]);
-  const logIdRef  = useRef(0);
-  const arenaRef  = useRef<ArenaHandle>(null);
-  const loopRef   = useRef<GameLoop | null>(null);
+  const logIdRef    = useRef(0);
+  const arenaRef    = useRef<ArenaHandle>(null);
+  const loopRef     = useRef<GameLoop | null>(null);
   const playerIdRef = useRef("bot-player");
+
+  // ── Free-play battle config ─────────────────────────────────────────────────
+  const [selectedOpponents, setSelectedOpponents] = useState<Set<string>>(
+    () => new Set([EXAMPLE_BOTS[0]!.id])
+  );
+  const [freePlayObstacles, setFreePlayObstacles] = useState(false);
 
   // ── Resizable divider ───────────────────────────────────────────────────────
   const dragging = useRef(false);
@@ -135,10 +143,11 @@ export function DashboardPage() {
       bots = [playerBot, currentChallenge.opponent, ...(currentChallenge.extraOpponents ?? [])];
       arenaOptions = currentChallenge.withObstacles ? undefined : { obstacles: false };
     } else {
-      bots = [playerBot];
+      const opponents = EXAMPLE_BOTS.filter((b) => selectedOpponents.has(b.id));
+      if (opponents.length === 0) return;
+      bots = [playerBot, ...opponents];
+      arenaOptions = freePlayObstacles ? undefined : { obstacles: false };
     }
-
-    if (bots.length < 2) return;
 
     const loop = new GameLoop(canvas, bots, handleGameOver, handleLog, arenaOptions);
     loopRef.current = loop;
@@ -147,7 +156,7 @@ export function DashboardPage() {
       loopRef.current = null;
       setRunning(false);
     });
-  }, [playerCode, playerName, currentChallenge, handleGameOver, handleLog]);
+  }, [playerCode, playerName, currentChallenge, selectedOpponents, freePlayObstacles, handleGameOver, handleLog]);
 
   const handleReset = useCallback(() => {
     handleStop();
@@ -160,12 +169,19 @@ export function DashboardPage() {
     navigate("/");
   }, [signOut, navigate]);
 
+  const handleLoadSave = useCallback((name: string, code: string) => {
+    setPlayerName(name);
+    setPlayerCode(code);
+    localStorage.setItem("playerCode", code);
+    setResetKey((k) => k + 1);
+  }, []);
+
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div style={{ display: "flex", height: "100vh", background: "#0d0d1a", color: "#eee" }}>
 
       {/* Left panel — editor */}
-      <div style={{ width: panelWidth, minWidth: 280, maxWidth: 700, display: "flex", flexDirection: "column", flexShrink: 0 }}>
+      <div style={{ width: panelWidth, minWidth: 280, maxWidth: 700, display: "flex", flexDirection: "column", flexShrink: 0, position: "relative" }}>
 
         {/* Tab / name row */}
         <div style={{ display: "flex", alignItems: "center", borderBottom: "1px solid #2a2a4e", background: "#0a0a18" }}>
@@ -184,6 +200,15 @@ export function DashboardPage() {
               {currentChallenge.extraOpponents?.map(e => ` + ${e.name}`)}
             </span>
           )}
+          {!inTutorial && (
+            <button
+              onClick={() => setSavesOpen(true)}
+              disabled={running}
+              style={{ marginLeft: "auto", background: "transparent", border: "none", color: "#444", fontFamily: "monospace", fontSize: "11px", padding: "0 10px", cursor: "pointer" }}
+            >
+              saves
+            </button>
+          )}
         </div>
 
         <Editor
@@ -194,10 +219,18 @@ export function DashboardPage() {
 
         <Controls
           running={running}
-          canStart={true}
+          canStart={!inTutorial ? selectedOpponents.size > 0 : true}
           onStart={handleStart}
           onStop={handleStop}
           onReset={handleReset}
+        />
+
+        <SavesPanel
+          open={savesOpen}
+          onClose={() => setSavesOpen(false)}
+          currentName={playerName}
+          currentCode={playerCode}
+          onLoad={handleLoadSave}
         />
       </div>
 
@@ -253,6 +286,18 @@ export function DashboardPage() {
             </span>
           )}
         </div>
+
+        {/* Free-play config — shown when not in tutorial and not running */}
+        {!inTutorial && !running && challengeIndex !== null && (
+          <div style={{ flexShrink: 0, padding: "12px 16px", background: "#0a0a18", borderRadius: "4px", border: "1px solid #1a1a3e" }}>
+            <BattleConfig
+              selected={selectedOpponents}
+              onChange={setSelectedOpponents}
+              withObstacles={freePlayObstacles}
+              onObstaclesChange={setFreePlayObstacles}
+            />
+          </div>
+        )}
 
         {/* Arena */}
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", minHeight: 0, overflow: "hidden" }}>

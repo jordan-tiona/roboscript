@@ -15,6 +15,13 @@
       "when": 1776885583749,
       "tag": "0001_concerned_black_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1777020398038,
+      "tag": "0002_bot_saves",
+      "breakpoints": true
     }
   ]
 }

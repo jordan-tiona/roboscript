@@ -4,7 +4,6 @@ import {
   pgTable,
   text,
   timestamp,
-  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -58,16 +57,14 @@ export const verification = pgTable("verification", {
 
 // ── Application tables ────────────────────────────────────────────────────────
 
-export const botSlots = pgTable("bot_slots", {
-  id:         uuid("id").primaryKey().defaultRandom(),
-  userId:     text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
-  slotIndex:  integer("slot_index").notNull(), // 0–4
-  name:       text("name").notNull().default("Bot"),
-  code:       text("code").notNull().default(""),
-  updatedAt:  timestamp("updated_at").notNull().defaultNow(),
-}, (t) => [
-  uniqueIndex("bot_slots_user_slot_idx").on(t.userId, t.slotIndex),
-]);
+export const botSaves = pgTable("bot_saves", {
+  id:        uuid("id").primaryKey().defaultRandom(),
+  userId:    text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  name:      text("name").notNull().default("Bot"),
+  code:      text("code").notNull().default(""),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
 
 export const tutorialProgress = pgTable("tutorial_progress", {
   userId:         text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),

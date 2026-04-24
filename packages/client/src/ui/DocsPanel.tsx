@@ -14,6 +14,7 @@ export function DocsPanel({ open, onClose }: Props) {
       transform: open ? "translateX(0)" : "translateX(100%)",
       transition: "transform 0.22s ease",
       overflow: "hidden",
+      pointerEvents: open ? "auto" : "none",
     }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: "1px solid var(--color-border)", flexShrink: 0 }}>

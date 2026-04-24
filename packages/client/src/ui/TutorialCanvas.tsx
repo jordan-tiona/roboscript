@@ -53,7 +53,7 @@ export function TutorialCanvas({ player, opponent, extraOpponents = [], withObst
         { x: aw * 0.5 - 30, y: ah * 0.5 + 40 },
         { x: aw * 0.5 - 40, y: ah * 0.5      },
       ]] : undefined;
-      const arenaOpts = { ...DEMO_ARENA, obstacles: withObstacles, spawnPositions, fixedObstacles };
+      const arenaOpts = { ...DEMO_ARENA, obstacles: withObstacles, spawnPositions, ...(fixedObstacles ? { fixedObstacles } : {}) };
       const loop = new GameLoop(canvasRef.current, bots, undefined, undefined, arenaOpts, true);
       loopRef.current = loop;
 
