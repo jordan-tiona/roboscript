@@ -1,7 +1,9 @@
 import {
   boolean,
   integer,
+  jsonb,
   pgTable,
+  real,
   text,
   timestamp,
   uuid,
@@ -70,4 +72,38 @@ export const tutorialProgress = pgTable("tutorial_progress", {
   userId:         text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
   challengeIndex: integer("challenge_index").notNull().default(0),
   updatedAt:      timestamp("updated_at").notNull().defaultNow(),
+});
+
+// ── Ladder ────────────────────────────────────────────────────────────────────
+
+/** The bot a user has entered into the ladder (one active entry per user). */
+export const ladderEntries = pgTable("ladder_entries", {
+  id:        uuid("id").primaryKey().defaultRandom(),
+  userId:    text("user_id").notNull().unique().references(() => user.id, { onDelete: "cascade" }),
+  botSaveId: uuid("bot_save_id").notNull().references(() => botSaves.id, { onDelete: "cascade" }),
+  rating:    real("rating").notNull().default(1000),
+  wins:      integer("wins").notNull().default(0),
+  losses:    integer("losses").notNull().default(0),
+  ties:      integer("ties").notNull().default(0),
+  /** Timestamp of the last match played — used to enforce per-bot match cooldown. */
+  lastMatchAt: timestamp("last_match_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+/** Result of a completed ladder match. */
+export const ladderMatches = pgTable("ladder_matches", {
+  id:          uuid("id").primaryKey().defaultRandom(),
+  entryAId:    uuid("entry_a_id").notNull().references(() => ladderEntries.id),
+  entryBId:    uuid("entry_b_id").notNull().references(() => ladderEntries.id),
+  /** null = tie */
+  winnerId:    uuid("winner_id"),
+  ratingDelta: real("rating_delta").notNull(), // absolute change applied to winner (loser gets negative)
+  /** Keyframe-compressed replay: array of sampled GameState snapshots (every Nth tick) + event log. */
+  replay:      jsonb("replay"),
+  /** How many ticks the match lasted. */
+  durationTicks: integer("duration_ticks").notNull(),
+  createdAt:   timestamp("created_at").notNull().defaultNow(),
+  /** Permanent saves are kept indefinitely; otherwise culled after retention window. */
+  permanent:   boolean("permanent").notNull().default(false),
 });

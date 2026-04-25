@@ -30,3 +30,10 @@ export const bulletGunHeat = (p: number): number => 1 + p / 5;
 export const SHIELD_MAX         = 20;   // max shield HP
 export const SHIELD_REGEN_DELAY = 150;  // ticks after last hit before regen starts (~5s)
 export const SHIELD_REGEN_RATE  = 1;    // HP restored per tick during regen
+
+// ─── Zone (shrinking kill zone) ───────────────────────────────────────────────
+
+export const ZONE_START_TICK   = 900;   // tick when zone begins shrinking (30s)
+export const ZONE_END_TICK     = 1800;  // tick when zone fully closes; also max match length (60s)
+export const ZONE_START_RADIUS = 750;   // covers all corners of the default 1200×900 arena
+export const ZONE_DAMAGE_PER_TICK = 0.5; // energy drained per tick while outside the zone

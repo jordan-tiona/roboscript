@@ -1,5 +1,5 @@
 import type { GameState } from "@roboscript/engine";
-import { BOT_RADIUS, BULLET_RADIUS, ARENA_WIDTH, ARENA_HEIGHT, SHIELD_MAX } from "@roboscript/engine";
+import { BOT_RADIUS, BULLET_RADIUS, ARENA_WIDTH, ARENA_HEIGHT, SHIELD_MAX, ZONE_START_TICK, ZONE_START_RADIUS } from "@roboscript/engine";
 
 const BOT_COLORS = ["#4fc3f7", "#ef5350", "#66bb6a", "#ffa726", "#ce93d8", "#80cbc4"];
 
@@ -90,6 +90,62 @@ export function renderFrame(
   ctx.strokeStyle = "#3a3a6e";
   ctx.lineWidth = 3;
   ctx.strokeRect(1.5, 1.5, aW - 3, aH - 3);
+
+  // Zone
+  const zoneR = state.zoneRadius;
+  const zoneCx = aW / 2;
+  const zoneCy = aH / 2;
+  const zoneActive = state.tick >= ZONE_START_TICK;
+  const zoneWarning = !zoneActive && state.tick >= ZONE_START_TICK - 300; // 10s warning
+
+  if (zoneActive && zoneR > 0) {
+    // Dark overlay outside the safe zone
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, aW, aH);
+    ctx.arc(zoneCx, zoneCy, zoneR, 0, Math.PI * 2, true); // true = counter-clockwise cuts a hole
+    ctx.fillStyle = "rgba(120, 0, 0, 0.28)";
+    ctx.fill("evenodd");
+    ctx.restore();
+
+    // Glowing ring
+    const pulse = (Math.sin(state.tick * 0.15) + 1) / 2;
+    ctx.beginPath();
+    ctx.arc(zoneCx, zoneCy, zoneR, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255, 60, 60, ${0.7 + pulse * 0.3})`;
+    ctx.lineWidth = 2 + pulse * 2;
+    ctx.shadowColor = "#ff3030";
+    ctx.shadowBlur = 8 + pulse * 12;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
+  if (zoneWarning) {
+    // Faint pre-warning ring at full size
+    const warnPulse = (Math.sin(state.tick * 0.1) + 1) / 2;
+    ctx.beginPath();
+    ctx.arc(zoneCx, zoneCy, ZONE_START_RADIUS * Math.max(aW / ARENA_WIDTH, aH / ARENA_HEIGHT), 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255, 140, 0, ${0.15 + warnPulse * 0.15})`;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([8, 8]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Zone label (top-center of arena)
+  if (zoneActive || zoneWarning) {
+    const ticksLeft = ZONE_START_TICK - state.tick;
+    const label = zoneActive
+      ? zoneR <= 0 ? "ZONE CLOSED" : `zone r=${Math.round(zoneR)}`
+      : `zone in ${Math.ceil(ticksLeft / 30)}s`;
+    const labelAlpha = zoneWarning ? 0.5 + ((Math.sin(state.tick * 0.15) + 1) / 2) * 0.4 : 0.7;
+    ctx.globalAlpha = labelAlpha;
+    ctx.fillStyle = zoneActive ? "#ff6060" : "#ffa040";
+    ctx.font = "11px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(label, aW / 2, 16);
+    ctx.globalAlpha = 1;
+  }
 
   // Obstacles
   for (const poly of state.obstacles) {

@@ -1,5 +1,8 @@
 import type { GameState, BotCommand, GameEvent, BotState, Vec2, Polygon } from "./types.js";
-import { ARENA_WIDTH, ARENA_HEIGHT, MAX_ENERGY, BOT_RADIUS, SHIELD_MAX } from "./constants.js";
+import {
+  ARENA_WIDTH, ARENA_HEIGHT, MAX_ENERGY, BOT_RADIUS, SHIELD_MAX,
+  ZONE_START_TICK, ZONE_END_TICK, ZONE_START_RADIUS, ZONE_DAMAGE_PER_TICK,
+} from "./constants.js";
 import {
   applyBotCommand,
   createBullet,
@@ -8,6 +11,13 @@ import {
   regenShields,
 } from "./physics.js";
 import { computeVisibility } from "./visibility.js";
+
+function computeZoneRadius(tick: number, arenaW: number, arenaH: number): number {
+  const startRadius = ZONE_START_RADIUS * Math.max(arenaW / ARENA_WIDTH, arenaH / ARENA_HEIGHT);
+  if (tick <= ZONE_START_TICK) return startRadius;
+  if (tick >= ZONE_END_TICK) return 0;
+  return startRadius * (1 - (tick - ZONE_START_TICK) / (ZONE_END_TICK - ZONE_START_TICK));
+}
 
 /**
  * Pure tick function — zero side effects, zero I/O, runs in any JS environment.
@@ -58,7 +68,21 @@ export function tick(state: GameState, commands: readonly BotCommand[]): GameSta
   bots = collidedBots;
   events.push(...collisionEvents);
 
-  // 5. Mark dead bots
+  // 5. Zone damage
+  const nextTick = state.tick + 1;
+  const zoneRadius = computeZoneRadius(nextTick, arenaW, arenaH);
+  const zoneCx = arenaW / 2;
+  const zoneCy = arenaH / 2;
+  bots = bots.map((bot) => {
+    if (!bot.isAlive) return bot;
+    const dist = Math.hypot(bot.position.x - zoneCx, bot.position.y - zoneCy);
+    if (dist <= zoneRadius) return bot;
+    const damage = ZONE_DAMAGE_PER_TICK;
+    events.push({ type: "zoneDamage", botId: bot.id, damage });
+    return { ...bot, energy: bot.energy - damage };
+  });
+
+  // 6. Mark dead bots
   bots = bots.map((bot) => {
     if (bot.isAlive && bot.energy <= 0) {
       events.push({ type: "botDeath", botId: bot.id });
@@ -67,19 +91,27 @@ export function tick(state: GameState, commands: readonly BotCommand[]): GameSta
     return bot;
   });
 
-  // 5.5 Shield regeneration
+  // 6.5 Shield regeneration
   bots = regenShields(bots);
 
-  // 6. Compute visibility (after movement so updated positions are used)
+  // 7. Compute visibility (after movement so updated positions are used)
   const visibility = computeVisibility(bots, state.obstacles);
 
-  // 7. Win condition
+  // 8. Win condition — also trigger if max ticks reached (winner = highest energy)
   const alive = bots.filter((b) => b.isAlive);
-  const isOver = alive.length <= 1;
-  const winnerId = isOver && alive.length === 1 ? (alive[0]?.id ?? null) : null;
+  let isOver = alive.length <= 1;
+  let winnerId: string | null = isOver && alive.length === 1 ? (alive[0]?.id ?? null) : null;
+
+  if (!isOver && nextTick >= ZONE_END_TICK) {
+    isOver = true;
+    const sorted = alive.slice().sort((a, b) => b.energy - a.energy);
+    winnerId = sorted[0] && sorted[1] && sorted[0].energy > sorted[1].energy
+      ? sorted[0].id
+      : null; // tie
+  }
 
   return {
-    tick: state.tick + 1,
+    tick: nextTick,
     bots,
     bullets: remaining,
     events,
@@ -90,6 +122,7 @@ export function tick(state: GameState, commands: readonly BotCommand[]): GameSta
     nextBulletId,
     arenaWidth: arenaW,
     arenaHeight: arenaH,
+    zoneRadius,
   };
 }
 
@@ -227,5 +260,6 @@ export function buildInitialState(
     nextBulletId: 0,
     arenaWidth: arenaW,
     arenaHeight: arenaH,
+    zoneRadius: computeZoneRadius(0, arenaW, arenaH),
   };
 }

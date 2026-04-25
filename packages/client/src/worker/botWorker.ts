@@ -78,7 +78,7 @@ return new ${className}();`,
 
   if (msg.type === "tick" && runtime) {
     currentTick = msg.tickId;
-    runtime._receiveTick(msg.tickId, msg.state, msg.enemies, msg.events);
+    runtime._receiveTick(msg.tickId, msg.state, msg.enemies, msg.events, msg.zoneRadius);
   }
 
   if (msg.type === "terminate") {

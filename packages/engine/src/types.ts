@@ -48,6 +48,8 @@ export interface GameState {
   readonly nextBulletId: number;
   readonly arenaWidth: number;
   readonly arenaHeight: number;
+  /** Current zone radius. Starts shrinking at ZONE_START_TICK; 0 when fully closed. */
+  readonly zoneRadius: number;
 }
 
 // ─── Commands ─────────────────────────────────────────────────────────────────
@@ -73,7 +75,8 @@ export type GameEvent =
   | BulletHitEvent
   | BotDeathEvent
   | BulletMissedEvent
-  | BulletFiredEvent;
+  | BulletFiredEvent
+  | ZoneDamageEvent;
 
 export interface HitByBulletEvent {
   readonly type: "hitByBullet";
@@ -124,4 +127,10 @@ export interface BulletFiredEvent {
   readonly type: "bulletFired";
   readonly botId: string;
   readonly bulletId: string;
+}
+
+export interface ZoneDamageEvent {
+  readonly type: "zoneDamage";
+  readonly botId: string;
+  readonly damage: number;
 }

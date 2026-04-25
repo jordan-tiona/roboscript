@@ -14,7 +14,7 @@ export type MainToWorker =
       arenaHeight: number;
       obstacles: Array<Array<{ x: number; y: number }>>;
     }
-  | { type: "tick"; tickId: number; state: BotStateView; enemies: EnemyView[]; events: GameEvent[] }
+  | { type: "tick"; tickId: number; state: BotStateView; enemies: EnemyView[]; events: GameEvent[]; zoneRadius: number }
   | { type: "terminate" };
 
 // ─── Worker → Main thread ─────────────────────────────────────────────────────

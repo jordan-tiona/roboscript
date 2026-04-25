@@ -177,6 +177,7 @@ export class GameDriver {
         if (e.type === "bulletHit") return e.ownerId === bot.id;
         if (e.type === "botDeath") return e.botId === bot.id;
         if (e.type === "bulletMissed") return e.ownerId === bot.id;
+        if (e.type === "zoneDamage") return e.botId === bot.id;
         return false;
       });
 
@@ -195,6 +196,7 @@ export class GameDriver {
         },
         enemies: this.buildEnemyViews(bot.id),
         events: botEvents,
+        zoneRadius: this.state.zoneRadius,
       };
       worker.postMessage(tickMsg);
 

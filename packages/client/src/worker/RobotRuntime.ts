@@ -67,6 +67,7 @@ export class RobotRuntime {
   private _botCount = 0;
   private _arenaWidth = 1200;
   private _arenaHeight = 900;
+  private _zoneRadius = 750;
   private _obstacles: ReadonlyArray<ReadonlyArray<{ x: number; y: number }>> = [];
   private _sendCommand!: CommandCallback;
   private _tickResolve: ((events: readonly GameEvent[]) => void) | null = null;
@@ -119,6 +120,10 @@ export class RobotRuntime {
   get arenaWidth() { return this._arenaWidth; }
   get arenaHeight() { return this._arenaHeight; }
   get tick() { return this._currentTickId; }
+  /** Current zone radius in units. Starts shrinking at tick 900; 0 at tick 1800. */
+  get zoneRadius() { return this._zoneRadius; }
+  /** Center of the zone — always the arena center. */
+  get zoneCenter(): { x: number; y: number } { return { x: this._arenaWidth / 2, y: this._arenaHeight / 2 }; }
   /** Static obstacle rects for this match. Bullets and LOS are blocked by these. */
   get obstacles() { return this._obstacles; }
 
@@ -156,10 +161,12 @@ export class RobotRuntime {
     state: BotStateView,
     enemies: EnemyView[],
     events: readonly GameEvent[],
+    zoneRadius: number,
   ): void {
     this._currentTickId = tickId;
     this._state = state;
     this._enemies = enemies;
+    this._zoneRadius = zoneRadius;
     this._started = true;
 
     // If a command was queued before the first tick, send it now as this tick's
