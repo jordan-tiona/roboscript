@@ -4,6 +4,8 @@ import { keymap } from "@codemirror/view";
 import { javascript } from "@codemirror/lang-javascript";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { indentMore, indentLess } from "@codemirror/commands";
+import { autocompletion } from "@codemirror/autocomplete";
+import { robotCompletionSource } from "./robotCompletions";
 
 interface Props {
   initialCode: string;
@@ -22,6 +24,7 @@ export function Editor({ initialCode, onChange }: Props) {
       extensions: [
         basicSetup,
         javascript(),
+        autocompletion({ override: [robotCompletionSource] }),
         oneDark,
         keymap.of([
           { key: "Tab", run: indentMore },
