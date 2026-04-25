@@ -5,6 +5,7 @@ import { cors } from "hono/cors";
 import { auth } from "./auth.js";
 import { botsRouter } from "./routes/bots.js";
 import { profileRouter } from "./routes/profile.js";
+import { ladderRouter } from "./routes/ladder.js";
 
 const CLIENT_ORIGIN = process.env["CLIENT_ORIGIN"] ?? "http://localhost:5173";
 const PORT = parseInt(process.env["PORT"] ?? "8080");
@@ -26,6 +27,7 @@ app.on(["GET", "POST"], "/api/auth/**", (c) => auth.handler(c.req.raw));
 
 app.route("/api/bots", botsRouter);
 app.route("/api/profile", profileRouter);
+app.route("/api/ladder", ladderRouter);
 
 serve({ fetch: app.fetch, port: PORT }, () => {
   console.log(`Server running on port ${PORT}`);

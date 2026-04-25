@@ -4,6 +4,7 @@ import { SettingsDrawer } from "../ui/SettingsDrawer.js";
 import { DocsPanel } from "../ui/DocsPanel.js";
 import { ChallengeIntro } from "../ui/ChallengeIntro.js";
 import { SavesPanel } from "../ui/SavesPanel.js";
+import { LadderPanel } from "../ui/LadderPanel.js";
 import { BattleConfig, EXAMPLE_BOTS } from "../ui/BattleConfig.js";
 import { Editor } from "../ui/Editor.js";
 import { Arena } from "../ui/Arena.js";
@@ -39,6 +40,7 @@ export function DashboardPage() {
   const [docsOpen, setDocsOpen]           = useState(false);
   const [introOpen, setIntroOpen]         = useState(false);
   const [savesOpen, setSavesOpen]         = useState(false);
+  const [ladderOpen, setLadderOpen]       = useState(false);
   const [panelWidth, setPanelWidth] = useState(() => {
     const saved = localStorage.getItem("editorPanelWidth");
     return saved ? Math.max(280, Math.min(700, Number(saved))) : 420;
@@ -266,6 +268,12 @@ export function DashboardPage() {
           {user && (
             <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "10px" }}>
               <button
+                onClick={() => setLadderOpen(o => !o)}
+                style={{ background: "transparent", border: "1px solid #2a2a4e", borderRadius: "3px", color: ladderOpen ? "#9090e0" : "#555", fontFamily: "monospace", fontSize: "11px", padding: "2px 8px", cursor: "pointer" }}
+              >
+                ladder
+              </button>
+              <button
                 onClick={() => setDocsOpen(o => !o)}
                 style={{ background: "transparent", border: "1px solid #2a2a4e", borderRadius: "3px", color: docsOpen ? "#9090e0" : "#555", fontFamily: "monospace", fontSize: "11px", padding: "2px 8px", cursor: "pointer" }}
               >
@@ -309,6 +317,7 @@ export function DashboardPage() {
         {/* Overlays */}
         <DocsPanel open={docsOpen} onClose={() => setDocsOpen(false)} />
         <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+        <LadderPanel open={ladderOpen} onClose={() => setLadderOpen(false)} />
         {currentChallenge && (
           <ChallengeIntro
             key={currentChallenge.index}

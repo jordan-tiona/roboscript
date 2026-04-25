@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@roboscript/engine": "workspace:*",
     "@hono/node-server": "^1.13.0",
     "better-auth": "^1.0.0",
     "dotenv": "^16.0.0",
