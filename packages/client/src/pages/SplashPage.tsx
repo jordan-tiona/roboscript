@@ -63,6 +63,9 @@ export function SplashPage() {
         </form>
 
         <p style={footerStyle}>
+          <Link to="/forgot-password" style={linkStyle}>Forgot password?</Link>
+        </p>
+        <p style={footerStyle}>
           No account?{" "}
           <Link to="/register" style={linkStyle}>Create one</Link>
         </p>

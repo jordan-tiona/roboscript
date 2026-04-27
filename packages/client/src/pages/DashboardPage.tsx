@@ -109,7 +109,7 @@ export function DashboardPage() {
   // ── Game callbacks ──────────────────────────────────────────────────────────
   const handleLog = useCallback((botName: string, message: string, tick: number, type?: "log" | "error") => {
     setLogs((prev) => {
-      const entry: LogEntry = { id: logIdRef.current++, botName, message, tick, type };
+      const entry: LogEntry = { id: logIdRef.current++, botName, message, tick, type: type ?? "log" };
       return prev.length >= 500 ? [...prev.slice(1), entry] : [...prev, entry];
     });
   }, []);

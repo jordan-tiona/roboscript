@@ -5,7 +5,7 @@ export interface LogEntry {
   botName: string;
   message: string;
   tick: number;
-  type?: "log" | "error";
+  type: "log" | "error";
 }
 
 interface Props {

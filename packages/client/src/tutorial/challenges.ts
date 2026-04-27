@@ -134,37 +134,6 @@ export const CHALLENGES: Challenge[] = [
   },
   {
     index: 4,
-    title: "Survive the pressure",
-    blurb: "Two opponents at once: the Turret fires from a fixed position while the Wanderer " +
-      "approaches from an unpredictable angle. There's no single target to focus on — " +
-      "you need to stay mobile, prioritize the closer threat, and keep your shield from depleting.",
-    snippet:
-`async run() {
-  while (true) {
-    const target = this.enemies
-      .filter(e => e.alive)
-      .sort((a, b) => this.distanceTo(a) - this.distanceTo(b))[0];
-    if (!target) { await this.step({ velocity: 2 + Math.random() * 6, turn: 8 }); continue; }
-
-    await this.step({
-      velocity: 2 + Math.random() * 6, // stay unpredictable under fire
-      turn: this.bearingTo(target) + 50,
-      gunTurn: this.gunBearingTo(target),
-      fire: this.gunHeat === 0,
-      firePower: 1.5,
-    });
-  }
-}`,
-    opponent:       { id: "opp-4a", name: "Turret",  code: turretCode  },
-    extraOpponents: [{ id: "opp-4b", name: "Wanderer", code: wandererCode }],
-    demo: {
-      player:         { id: "demo-p",  name: "You",     code: d6Code      },
-      opponent:       { id: "demo-o1", name: "Turret",  code: turretCode  },
-      extraOpponents: [{ id: "demo-o2", name: "Wanderer", code: wandererCode }],
-    },
-  },
-  {
-    index: 5,
     title: "Lead your shots",
     blurb: "The Sprinter moves in fast, predictable horizontal passes — but if you aim directly " +
       "at it, your bullets arrive after it has already moved on. " +
@@ -188,14 +157,14 @@ export const CHALLENGES: Challenge[] = [
     });
   }
 }`,
-    opponent: { id: "opp-5", name: "Sprinter", code: sprinterCode },
+    opponent: { id: "opp-4", name: "Sprinter", code: sprinterCode },
     demo: {
       player:   { id: "demo-p", name: "You", code: d7Code },
       opponent: { id: "demo-o", name: "Sprinter", code: sprinterCode },
     },
   },
   {
-    index: 6,
+    index: 5,
     title: "Use the terrain",
     blurb: "The Sniper keeps its distance and fires maximum-power shots that can strip your shield in one hit. " +
       "Obstacles block both bullets and line of sight — use that to your advantage. " +
@@ -227,11 +196,42 @@ export const CHALLENGES: Challenge[] = [
     }
   }
 }`,
-    opponent: { id: "opp-6", name: "Sniper", code: sniperCode },
+    opponent: { id: "opp-5", name: "Sniper", code: sniperCode },
     withObstacles: true,
     demo: {
       player:   { id: "demo-p", name: "You", code: d8Code },
       opponent: { id: "demo-o", name: "Sniper", code: sniperCode },
+    },
+  },
+  {
+    index: 6,
+    title: "Survive the pressure",
+    blurb: "Two opponents at once: the Turret fires from a fixed position while the Wanderer " +
+      "approaches from an unpredictable angle. There's no single target to focus on — " +
+      "you need to stay mobile, prioritize the closer threat, and keep your shield from depleting.",
+    snippet:
+`async run() {
+  while (true) {
+    const target = this.enemies
+      .filter(e => e.alive)
+      .sort((a, b) => this.distanceTo(a) - this.distanceTo(b))[0];
+    if (!target) { await this.step({ velocity: 2 + Math.random() * 6, turn: 8 }); continue; }
+
+    await this.step({
+      velocity: 2 + Math.random() * 6, // stay unpredictable under fire
+      turn: this.bearingTo(target) + 50,
+      gunTurn: this.gunBearingTo(target),
+      fire: this.gunHeat === 0,
+      firePower: 1.5,
+    });
+  }
+}`,
+    opponent:       { id: "opp-6a", name: "Turret",  code: turretCode  },
+    extraOpponents: [{ id: "opp-6b", name: "Wanderer", code: wandererCode }],
+    demo: {
+      player:         { id: "demo-p",  name: "You",     code: d6Code      },
+      opponent:       { id: "demo-o1", name: "Turret",  code: turretCode  },
+      extraOpponents: [{ id: "demo-o2", name: "Wanderer", code: wandererCode }],
     },
   },
 ];

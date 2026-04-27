@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm typecheck *)",
+      "Bash(pnpm --filter * typecheck *)",
+      "Bash(pnpm --filter * exec tsc --noEmit *)"
+    ]
+  }
+}

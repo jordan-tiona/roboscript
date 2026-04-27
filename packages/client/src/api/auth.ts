@@ -23,8 +23,8 @@ export async function signIn(email: string, password: string): Promise<SessionUs
   return data.user as SessionUser;
 }
 
-export async function signUp(name: string, email: string, password: string): Promise<SessionUser> {
-  const res = await post("/api/auth/sign-up/email", { name, email, password });
+export async function signUp(name: string, email: string, password: string, recaptchaToken: string): Promise<SessionUser> {
+  const res = await post("/api/auth/sign-up/email", { name, email, password, recaptchaToken });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error((data as { message?: string }).message ?? "Sign up failed");
@@ -42,4 +42,21 @@ export async function getSession(): Promise<SessionUser | null> {
   if (!res.ok) return null;
   const data = await res.json();
   return (data?.user as SessionUser) ?? null;
+}
+
+export async function forgotPassword(email: string): Promise<void> {
+  const redirectTo = `${window.location.origin}/reset-password`;
+  const res = await post("/api/auth/request-password-reset", { email, redirectTo });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error((data as { message?: string }).message ?? "Request failed");
+  }
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  const res = await post("/api/auth/reset-password", { token, newPassword });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error((data as { message?: string }).message ?? "Reset failed");
+  }
 }

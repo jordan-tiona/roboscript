@@ -1,8 +1,6 @@
-import { useEffect, useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { signUp } from "../api/auth.js";
-import { useAuth } from "../context/AuthContext.js";
-import { preloadRecaptcha, getRecaptchaToken } from "../utils/recaptcha.js";
+import { useState } from "react";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
+import { resetPassword } from "../api/auth.js";
 
 interface PasswordRule {
   label: string;
@@ -16,32 +14,31 @@ const PASSWORD_RULES: PasswordRule[] = [
   { label: "One number",              test: (pw) => /[0-9]/.test(pw) },
 ];
 
-export function RegisterPage() {
+export function ResetPasswordPage() {
   const navigate = useNavigate();
-  const { refresh } = useAuth();
-  const [name, setName]         = useState("");
-  const [email, setEmail]       = useState("");
+  const [params] = useSearchParams();
+  const token = params.get("token") ?? "";
+
   const [password, setPassword] = useState("");
+  const [done, setDone]         = useState(false);
   const [error, setError]       = useState("");
   const [busy, setBusy]         = useState(false);
   const [pwFocused, setPwFocused] = useState(false);
-
-  useEffect(() => { preloadRecaptcha(); }, []);
 
   const allRulesMet = PASSWORD_RULES.every((r) => r.test(password));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!allRulesMet) { setError("Please meet all password requirements."); return; }
+    if (!token) { setError("Invalid or expired reset link."); return; }
     setError("");
     setBusy(true);
     try {
-      const token = await getRecaptchaToken("register");
-      await signUp(name, email, password, token);
-      await refresh();
-      navigate("/dashboard");
+      await resetPassword(token, password);
+      setDone(true);
+      setTimeout(() => navigate("/"), 2500);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Registration failed");
+      setError(err instanceof Error ? err.message : "Reset failed");
     } finally {
       setBusy(false);
     }
@@ -49,73 +46,63 @@ export function RegisterPage() {
 
   const showRules = pwFocused || password.length > 0;
 
+  if (!token) {
+    return (
+      <div style={pageStyle}>
+        <div style={cardStyle}>
+          <h1 style={titleStyle}>Invalid link</h1>
+          <p style={descStyle}>This reset link is missing or invalid. Please request a new one.</p>
+          <Link to="/forgot-password" style={{ ...linkStyle, textAlign: "center" as const }}>Request new link</Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={pageStyle}>
       <div style={cardStyle}>
-        <h1 style={titleStyle}>Create account</h1>
+        <h1 style={titleStyle}>New password</h1>
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          <input
-            type="text"
-            placeholder="Display name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            autoComplete="name"
-            style={inputStyle}
-          />
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoComplete="email"
-            style={inputStyle}
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            onFocus={() => setPwFocused(true)}
-            onBlur={() => setPwFocused(false)}
-            required
-            autoComplete="new-password"
-            style={inputStyle}
-          />
+        {done ? (
+          <p style={descStyle}>Password updated! Redirecting to sign in…</p>
+        ) : (
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <input
+              type="password"
+              placeholder="New password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onFocus={() => setPwFocused(true)}
+              onBlur={() => setPwFocused(false)}
+              required
+              autoComplete="new-password"
+              style={inputStyle}
+            />
 
-          {showRules && (
-            <ul style={rulesListStyle}>
-              {PASSWORD_RULES.map((rule) => {
-                const met = rule.test(password);
-                return (
-                  <li key={rule.label} style={{ color: met ? "#5aae6a" : "#666", display: "flex", alignItems: "center", gap: "6px" }}>
-                    <span style={{ fontSize: "10px" }}>{met ? "✓" : "○"}</span>
-                    {rule.label}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+            {showRules && (
+              <ul style={rulesListStyle}>
+                {PASSWORD_RULES.map((rule) => {
+                  const met = rule.test(password);
+                  return (
+                    <li key={rule.label} style={{ color: met ? "#5aae6a" : "#666", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span style={{ fontSize: "10px" }}>{met ? "✓" : "○"}</span>
+                      {rule.label}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
 
-          {error && <p style={errorStyle}>{error}</p>}
+            {error && <p style={errorStyle}>{error}</p>}
 
-          <button type="submit" disabled={busy} style={primaryBtnStyle(busy)}>
-            {busy ? "Creating account…" : "Create account"}
-          </button>
-        </form>
+            <button type="submit" disabled={busy} style={primaryBtnStyle(busy)}>
+              {busy ? "Saving…" : "Set new password"}
+            </button>
+          </form>
+        )}
 
         <p style={footerStyle}>
-          Already have an account?{" "}
-          <Link to="/" style={linkStyle}>Sign in</Link>
-        </p>
-
-        <p style={captchaNoticeStyle}>
-          Protected by reCAPTCHA —{" "}
-          <a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer" style={linkStyle}>Privacy</a>
-          {" & "}
-          <a href="https://policies.google.com/terms" target="_blank" rel="noreferrer" style={linkStyle}>Terms</a>
+          <Link to="/" style={linkStyle}>Back to sign in</Link>
         </p>
       </div>
     </div>
@@ -148,6 +135,14 @@ const titleStyle: React.CSSProperties = {
   fontSize: "22px",
   color: "var(--color-text)",
   textAlign: "center",
+};
+
+const descStyle: React.CSSProperties = {
+  margin: 0,
+  fontFamily: "var(--font-ui)",
+  fontSize: "14px",
+  color: "var(--color-text-muted)",
+  lineHeight: 1.6,
 };
 
 const inputStyle: React.CSSProperties = {
@@ -198,14 +193,6 @@ const footerStyle: React.CSSProperties = {
   fontFamily: "var(--font-ui)",
   fontSize: "13px",
   color: "var(--color-text-muted)",
-};
-
-const captchaNoticeStyle: React.CSSProperties = {
-  margin: 0,
-  textAlign: "center",
-  fontFamily: "var(--font-ui)",
-  fontSize: "11px",
-  color: "var(--color-text-dim)",
 };
 
 const linkStyle: React.CSSProperties = {
