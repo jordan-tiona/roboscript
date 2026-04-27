@@ -5,6 +5,7 @@ export interface LogEntry {
   botName: string;
   message: string;
   tick: number;
+  type?: "log" | "error";
 }
 
 interface Props {
@@ -39,8 +40,8 @@ export function LogPanel({ entries, onClear }: Props) {
           entries.map((e) => (
             <div key={e.id} style={{ fontFamily: "monospace", fontSize: "11px", lineHeight: "1.6", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
               <span style={{ color: "#444" }}>[{e.tick}]</span>
-              <span style={{ color: "#5a5aae" }}> {e.botName}:</span>
-              <span style={{ color: "#aaa" }}> {e.message}</span>
+              <span style={{ color: e.type === "error" ? "#ae5a5a" : "#5a5aae" }}> {e.botName}:</span>
+              <span style={{ color: e.type === "error" ? "#e07070" : "#aaa" }}> {e.message}</span>
             </div>
           ))
         )}

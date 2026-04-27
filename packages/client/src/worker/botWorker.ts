@@ -8,19 +8,47 @@ const workerSelf = self as any;
 
 let runtime: RobotRuntime | null = null;
 let currentTick = 0;
+let userCodeLines: string[] = [];
+
+// new Function body starts with "use strict";\n so user line N is at function line N+1.
+// Subtract 1 from the stack's line number to get the user's line number.
+function errorContext(err: unknown): string {
+  const base = String(err);
+  if (!(err instanceof Error) || !err.stack) return base;
+  const match = err.stack.match(/<anonymous>:(\d+)(?::(\d+))?/);
+  if (!match) return base;
+  const userLine = parseInt(match[1]) - 1;
+  if (userLine < 1 || userLine > userCodeLines.length) return base;
+  const snippet = userCodeLines[userLine - 1]?.trim() ?? "";
+  return `${base} (line ${userLine})\n  ${snippet}`;
+}
 
 workerSelf.onmessage = (evt: MessageEvent<MainToWorker>) => {
   const msg = evt.data;
 
   if (msg.type === "init") {
     const botId = msg.botId;
+    userCodeLines = msg.code.split("\n");
 
-    // Redirect console.log from bot code to the main thread
+    // Redirect console.log/error from bot code to the main thread
+    const formatArgs = (...args: unknown[]) =>
+      args.map((a) => a !== null && typeof a === "object" ? JSON.stringify(a) : String(a)).join(" ");
     console.log = (...args: unknown[]) => {
-      const message = args.map((a) =>
-        a !== null && typeof a === "object" ? JSON.stringify(a) : String(a)
-      ).join(" ");
-      workerSelf.postMessage({ type: "log", botId, message, tick: currentTick } satisfies WorkerToMain);
+      workerSelf.postMessage({ type: "log", botId, message: formatArgs(...args), tick: currentTick } satisfies WorkerToMain);
+    };
+    console.error = (...args: unknown[]) => {
+      // Capture a stack trace to find which user line called console.error
+      const stack = new Error().stack ?? "";
+      const match = stack.match(/<anonymous>:(\d+)(?::(\d+))?/);
+      let suffix = "";
+      if (match) {
+        const userLine = parseInt(match[1]) - 1;
+        if (userLine >= 1 && userLine <= userCodeLines.length) {
+          const snippet = userCodeLines[userLine - 1]?.trim() ?? "";
+          suffix = ` (line ${userLine})\n  ${snippet}`;
+        }
+      }
+      workerSelf.postMessage({ type: "error", botId, message: formatArgs(...args) + suffix } satisfies WorkerToMain);
     };
 
     try {
@@ -59,20 +87,10 @@ return new ${className}();`,
       // Start the bot coroutine — immediately suspends on the first _nextTick call
       // and waits until the first tick message arrives from the main thread.
       runtime.run().catch((err: unknown) => {
-        const errMsg: WorkerToMain = {
-          type: "error",
-          botId,
-          message: String(err),
-        };
-        workerSelf.postMessage(errMsg);
+        workerSelf.postMessage({ type: "error", botId, message: errorContext(err) } satisfies WorkerToMain);
       });
     } catch (e) {
-      const errMsg: WorkerToMain = {
-        type: "error",
-        botId,
-        message: String(e),
-      };
-      workerSelf.postMessage(errMsg);
+      workerSelf.postMessage({ type: "error", botId, message: errorContext(e) } satisfies WorkerToMain);
     }
   }
 

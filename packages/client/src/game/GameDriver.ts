@@ -11,7 +11,7 @@ export interface BotEntry {
   code: string;
 }
 
-export type LogCallback = (botName: string, message: string, tick: number) => void;
+export type LogCallback = (botName: string, message: string, tick: number, type?: "log" | "error") => void;
 
 interface LastKnownEntry {
   x: number;
@@ -60,7 +60,8 @@ export class GameDriver {
             return;
           }
           if (msg.type === "error") {
-            console.error(`[${msg.botId}] init error:`, msg.message);
+            const botName = bots.find((b) => b.id === msg.botId)?.name ?? msg.botId;
+            this.onLog?.(botName, msg.message, 0, "error");
             resolve();
           }
         };
@@ -109,7 +110,8 @@ export class GameDriver {
       this.onLog?.(botName, msg.message, msg.tick);
     }
     if (msg.type === "error") {
-      console.error(`[${msg.botId}] runtime error:`, msg.message);
+      const botName = this.state.bots.find((b) => b.id === msg.botId)?.name ?? msg.botId;
+      this.onLog?.(botName, msg.message, this.state.tick, "error");
     }
   }
 
