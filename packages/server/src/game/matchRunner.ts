@@ -1,12 +1,28 @@
+import { Worker } from "worker_threads";
+import { fileURLToPath } from "url";
 import { tick as engineTick, buildInitialState } from "@roboscript/engine";
 import type { GameState, BotCommand, GameEvent } from "@roboscript/engine";
-import { RobotRuntime } from "../runtime/RobotRuntime.js";
 import type { BotStateView, EnemyView } from "../runtime/RobotRuntime.js";
 
-const TICK_DEADLINE_MS = 10;
+const TICK_DEADLINE_MS = 33; // ~1 tick at 30 TPS
 const MAX_STALL_TICKS = 30;
 const KEYFRAME_INTERVAL = 30;
 const K_FACTOR = 32;
+
+// Detect tsx dev mode — worker needs tsx loader injected
+const isTsx = import.meta.url.endsWith(".ts");
+const workerUrl = new URL(
+  isTsx ? "./serverBotWorker.ts" : "./serverBotWorker.js",
+  import.meta.url,
+);
+const workerPath = fileURLToPath(workerUrl);
+const workerExecArgv = isTsx ? ["--import", "tsx/esm"] : [];
+
+type WorkerMessage =
+  | { type: "ready"; botId: string }
+  | { type: "command"; tickId: number; botId: string; command: BotCommand }
+  | { type: "error"; botId: string; message: string }
+  | { type: "log"; botId: string; message: string; tick: number };
 
 export interface MatchBotEntry {
   id: string;
@@ -38,9 +54,8 @@ interface LastKnownEntry {
 
 interface BotRunner {
   entry: MatchBotEntry;
-  runtime: RobotRuntime | null;
+  worker: Worker | null;
   pendingCommand: BotCommand | null;
-  commandResolve: (() => void) | null;
   stallCount: number;
   crashed: boolean;
 }
@@ -52,8 +67,6 @@ function eloExpected(ra: number, rb: number): number {
 function computeDelta(ra: number, rb: number, score: number): number {
   return Math.round(K_FACTOR * (score - eloExpected(ra, rb)));
 }
-
-const yieldToMicrotasks = () => new Promise<void>(resolve => setImmediate(resolve));
 
 function buildBotStateView(bot: GameState["bots"][number]): BotStateView {
   return {
@@ -111,43 +124,64 @@ function filterBotEvents(events: readonly GameEvent[], botId: string): readonly 
   });
 }
 
-function initBotRunner(runner: BotRunner, state: GameState): void {
+async function initBotRunner(runner: BotRunner, state: GameState, botCount: number): Promise<void> {
+  const worker = new Worker(workerPath, { execArgv: workerExecArgv });
+  runner.worker = worker;
+
   const botState = state.bots.find(b => b.id === runner.entry.id)!;
 
-  const classMatch = runner.entry.code.match(/class\s+(\w+)\s+extends\s+(?:Robot|RobotRuntime)\b/);
-  const className = classMatch?.[1] ?? "MyRobot";
+  await new Promise<void>((resolve, reject) => {
+    const onMessage = (msg: WorkerMessage) => {
+      if (msg.type === "ready") {
+        worker.off("message", onMessage);
+        worker.off("error", onError);
+        resolve();
+      } else if (msg.type === "error") {
+        worker.off("message", onMessage);
+        worker.off("error", onError);
+        runner.crashed = true;
+        console.error(`[${runner.entry.name}] init error: ${msg.message}`);
+        resolve(); // don't reject — crashed runner is handled gracefully
+      }
+    };
+    const onError = (err: Error) => {
+      worker.off("message", onMessage);
+      worker.off("error", onError);
+      runner.crashed = true;
+      console.error(`[${runner.entry.name}] worker error:`, err);
+      resolve();
+    };
+    worker.on("message", onMessage);
+    worker.on("error", onError);
 
-  let bot: RobotRuntime;
-  try {
-    const factory = new Function(
-      "Robot", "RobotRuntime",
-      `"use strict";\n${runner.entry.code}\nif (typeof ${className} === 'undefined') { throw new Error('Bot must extend Robot'); } return new ${className}();`,
-    );
-    bot = factory(RobotRuntime, RobotRuntime) as RobotRuntime;
-  } catch (e) {
-    console.error(`[${runner.entry.name}] init error:`, e);
-    runner.crashed = true;
-    return;
-  }
-
-  bot._init(
-    runner.entry.id,
-    2,
-    (cmd) => {
-      runner.pendingCommand = cmd;
-      runner.commandResolve?.();
-      runner.commandResolve = null;
-    },
-    buildBotStateView(botState),
-    state.arenaWidth, state.arenaHeight,
-    state.obstacles.map(poly => poly.map(v => ({ x: v.x, y: v.y }))),
-  );
-
-  runner.runtime = bot;
-  bot.run().catch(e => {
-    console.error(`[${runner.entry.name}] runtime error:`, e);
-    runner.crashed = true;
+    worker.postMessage({
+      type: "init",
+      botId: runner.entry.id,
+      botName: runner.entry.name,
+      botCount,
+      code: runner.entry.code,
+      initialState: buildBotStateView(botState),
+      arenaWidth: state.arenaWidth,
+      arenaHeight: state.arenaHeight,
+      obstacles: state.obstacles.map(poly => poly.map(v => ({ x: v.x, y: v.y }))),
+    });
   });
+
+  if (!runner.crashed) {
+    worker.on("message", (msg: WorkerMessage) => {
+      if (msg.type === "command") {
+        runner.pendingCommand = msg.command;
+      } else if (msg.type === "error") {
+        console.error(`[${runner.entry.name}] ${msg.message}`);
+        runner.crashed = true;
+      }
+      // "log" messages are silently dropped server-side
+    });
+    worker.on("error", (err) => {
+      console.error(`[${runner.entry.name}] worker error:`, err);
+      runner.crashed = true;
+    });
+  }
 }
 
 export async function runMatch(botA: MatchBotEntry, botB: MatchBotEntry): Promise<MatchResult> {
@@ -157,16 +191,11 @@ export async function runMatch(botA: MatchBotEntry, botB: MatchBotEntry): Promis
   );
 
   const runners: BotRunner[] = [
-    { entry: botA, runtime: null, pendingCommand: null, commandResolve: null, stallCount: 0, crashed: false },
-    { entry: botB, runtime: null, pendingCommand: null, commandResolve: null, stallCount: 0, crashed: false },
+    { entry: botA, worker: null, pendingCommand: null, stallCount: 0, crashed: false },
+    { entry: botB, worker: null, pendingCommand: null, stallCount: 0, crashed: false },
   ];
 
-  for (const runner of runners) {
-    initBotRunner(runner, state);
-  }
-
-  // Yield so all bot coroutines can start and reach their first suspension point
-  await yieldToMicrotasks();
+  await Promise.all(runners.map(r => initBotRunner(r, state, runners.length)));
 
   const lastKnownMap = new Map<string, Map<string, LastKnownEntry>>();
   for (const runner of runners) {
@@ -177,26 +206,34 @@ export async function runMatch(botA: MatchBotEntry, botB: MatchBotEntry): Promis
   const allEvents: ReplayData["events"] = [];
 
   while (!state.isOver) {
-    // Trigger all alive bots simultaneously
+    // Send tick to all alive bots simultaneously
     for (const runner of runners) {
-      if (runner.crashed || !runner.runtime) continue;
+      if (runner.crashed || !runner.worker) continue;
       const bot = state.bots.find(b => b.id === runner.entry.id)!;
       if (!bot.isAlive) continue;
+
+      runner.pendingCommand = null;
 
       const enemies = buildEnemyViews(state, runner.entry.id, lastKnownMap.get(runner.entry.id)!);
       const botEvents = filterBotEvents(state.events, runner.entry.id);
 
-      runner.runtime._receiveTick(state.tick, buildBotStateView(bot), enemies, botEvents, state.zoneRadius);
+      runner.worker.postMessage({
+        type: "tick",
+        tickId: state.tick,
+        state: buildBotStateView(bot),
+        enemies,
+        events: botEvents,
+        zoneRadius: state.zoneRadius,
+      });
     }
 
-    // Yield: all bot microtasks complete before setImmediate fires
-    const deadline = new Promise<void>(resolve => setTimeout(resolve, TICK_DEADLINE_MS));
-    await Promise.race([yieldToMicrotasks(), deadline]);
+    // Wait for commands, up to deadline
+    await new Promise<void>(resolve => setTimeout(resolve, TICK_DEADLINE_MS));
 
     // Collect commands
     const commands: BotCommand[] = [];
     for (const runner of runners) {
-      if (runner.crashed || !runner.runtime) continue;
+      if (runner.crashed || !runner.worker) continue;
       const bot = state.bots.find(b => b.id === runner.entry.id)!;
       if (!bot.isAlive) continue;
 
@@ -238,6 +275,13 @@ export async function runMatch(botA: MatchBotEntry, botB: MatchBotEntry): Promis
     state = engineTick(state, commands);
   }
 
+  // Terminate all workers
+  for (const runner of runners) {
+    runner.worker?.postMessage({ type: "terminate" });
+    // Give worker a moment to exit cleanly, then force-terminate
+    setTimeout(() => runner.worker?.terminate(), 500);
+  }
+
   // Final keyframe
   keyframes.push({
     tick: state.tick,
@@ -263,7 +307,6 @@ export async function runMatch(botA: MatchBotEntry, botB: MatchBotEntry): Promis
     winnerEntryId = winnerRunner.entry.entryId;
     ratingDelta = Math.abs(computeDelta(winnerRunner.entry.rating, loserRunner.entry.rating, 1));
   } else {
-    // Draw — small rating exchange
     ratingDelta = Math.abs(computeDelta(botA.rating, botB.rating, 0.5));
   }
 

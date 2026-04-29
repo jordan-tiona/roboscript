@@ -65,6 +65,7 @@ export function DashboardPage() {
   const [playerCode, setPlayerCode] = useState(() => localStorage.getItem("playerCode") ?? DEFAULT_BOT_CODE);
   const [playerName, setPlayerName] = useState("MyRobot");
   const [running, setRunning]       = useState(false);
+  const [speed, setSpeed]           = useState(1);
   const [resetKey, setResetKey]     = useState(0);
   const [logs, setLogs]             = useState<LogEntry[]>([]);
   const logIdRef    = useRef(0);
@@ -152,6 +153,7 @@ export function DashboardPage() {
     }
 
     const loop = new GameLoop(canvas, bots, handleGameOver, handleLog, arenaOptions);
+    loop.setSpeed(speed);
     loopRef.current = loop;
     setRunning(true);
     loop.start(bots).catch(() => {
@@ -222,9 +224,11 @@ export function DashboardPage() {
         <Controls
           running={running}
           canStart={!inTutorial ? selectedOpponents.size > 0 : true}
+          speed={speed}
           onStart={handleStart}
           onStop={handleStop}
           onReset={handleReset}
+          onSpeedChange={(f) => { setSpeed(f); loopRef.current?.setSpeed(f); }}
         />
 
         <SavesPanel

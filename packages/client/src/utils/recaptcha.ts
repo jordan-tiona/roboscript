@@ -7,7 +7,7 @@ declare global {
   }
 }
 
-const SITE_KEY = import.meta.env["VITE_RECAPTCHA_SITE_KEY"] as string | undefined;
+const SITE_KEY = import.meta.env["VITE_RS_RECAPTCHA_SITE_KEY"] as string | undefined;
 
 let loadPromise: Promise<void> | null = null;
 

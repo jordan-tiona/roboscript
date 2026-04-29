@@ -16,6 +16,7 @@ export class GameLoop {
   private running = false;
   private onGameOver: ((winnerId: string | null) => void) | null = null;
   private countdown: number | null = null;
+  private speedFraction = 1;
 
   private noCountdown: boolean;
 
@@ -60,7 +61,12 @@ export class GameLoop {
       this.countdown = null;
     }
 
-    // Game tick loop — fixed rate
+    // Game tick loop — fixed rate, respects current speedFraction
+    this.startTicking();
+  }
+
+  private startTicking(): void {
+    this.stopTicking();
     this.tickTimer = setInterval(() => {
       if (!this.running) return;
       if (this.driver.getState().isOver) {
@@ -70,7 +76,12 @@ export class GameLoop {
         return;
       }
       this.driver.runTick((s) => { this.latestState = s; }).catch(console.error);
-    }, 1000 / TICKS_PER_SECOND);
+    }, 1000 / TICKS_PER_SECOND / this.speedFraction);
+  }
+
+  setSpeed(fraction: number): void {
+    this.speedFraction = fraction;
+    if (this.running) this.startTicking();
   }
 
   private renderCountdown(value: number): void {

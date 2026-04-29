@@ -33,7 +33,7 @@ function validatePasswordStrength(password: string): string | null {
 }
 
 async function verifyRecaptcha(token: string): Promise<boolean> {
-  const secret = process.env["RECAPTCHA_SECRET_KEY"];
+  const secret = process.env["RS_RECAPTCHA_SECRET_KEY"];
   if (!secret) return true; // skip when not configured (dev)
   if (!token)  return false;
   const res = await fetch("https://www.google.com/recaptcha/api/siteverify", {
@@ -75,7 +75,7 @@ app.post("/api/auth/reset-password", async (c) => {
 });
 
 // better-auth owns all remaining /api/auth/* routes
-app.on(["GET", "POST"], "/api/auth/**", (c) => auth.handler(c.req.raw));
+app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
 app.route("/api/bots", botsRouter);
 app.route("/api/profile", profileRouter);

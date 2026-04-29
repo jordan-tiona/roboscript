@@ -566,6 +566,7 @@ export class RobotRuntime {
   onBulletHit(_e: BulletHitEvent): void | Promise<void> {}
   onBotCollision(_e: BotCollisionEvent): void | Promise<void> {}
   onDeath(): void {}
+  onBattleEnd(): void {}
 
   // ── Entry point ───────────────────────────────────────────────────────────
   async run(): Promise<void> {

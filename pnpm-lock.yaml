@@ -32,6 +32,9 @@ importers:
       '@roboscript/engine':
         specifier: workspace:*
         version: link:../engine
+      acorn:
+        specifier: ^8.16.0
+        version: 8.16.0
       codemirror:
         specifier: ^6.0.1
         version: 6.0.2
@@ -45,6 +48,9 @@ importers:
         specifier: ^7.14.2
         version: 7.14.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
     devDependencies:
+      '@types/acorn':
+        specifier: ^6.0.4
+        version: 6.0.4
       '@types/react':
         specifier: ^18.3.12
         version: 18.3.28
@@ -954,6 +960,10 @@ packages:
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
+  '@types/acorn@6.0.4':
+    resolution: {integrity: sha512-DafqcBAjbOOmgqIx3EF9EAdBKAKgspv00aQVIW3fVQ0TXo5ZPBeSRey1SboVAUzjw8Ucm7cd1gtTSlosYoEQLA==}
+    deprecated: This is a stub types definition. acorn provides its own type definitions, so you do not need this installed.
+
   '@types/babel__core@7.20.5':
     resolution: {integrity: sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA==}
 
@@ -1000,6 +1010,11 @@ packages:
     engines: {node: ^14.18.0 || >=16.0.0}
     peerDependencies:
       vite: ^4.2.0 || ^5.0.0 || ^6.0.0 || ^7.0.0
+
+  acorn@8.16.0:
+    resolution: {integrity: sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==}
+    engines: {node: '>=0.4.0'}
+    hasBin: true
 
   ansi-regex@5.0.1:
     resolution: {integrity: sha512-quJQXlTSUGL2LH9SUXo8VwsY4soanhgo6LNSm84E1LBcE8s3O0wpdiRzyR9z/ZZJMlMWv37qOOb9pdJlMUEKFQ==}
@@ -2149,6 +2164,10 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
+  '@types/acorn@6.0.4':
+    dependencies:
+      acorn: 8.16.0
+
   '@types/babel__core@7.20.5':
     dependencies:
       '@babel/parser': 7.29.2
@@ -2215,6 +2234,8 @@ snapshots:
       vite: 6.4.2(@types/node@22.19.17)(tsx@4.21.0)
     transitivePeerDependencies:
       - supports-color
+
+  acorn@8.16.0: {}
 
   ansi-regex@5.0.1: {}
 

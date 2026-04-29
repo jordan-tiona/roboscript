@@ -2,7 +2,7 @@ import { tick, buildInitialState } from "@roboscript/engine";
 import type { GameState, BotCommand, BuildOptions } from "@roboscript/engine";
 import type { MainToWorker, WorkerToMain, EnemyView } from "../worker/protocol.js";
 
-const TICK_DEADLINE_MS = 50;  // max ms to wait for a bot command per tick
+const TICK_DEADLINE_MS = 33;  // max ms to wait for a bot command per tick (~1 tick at 30 TPS)
 const MAX_STALL_TICKS = 30;   // consecutive stalls before bot is terminated
 
 export interface BotEntry {

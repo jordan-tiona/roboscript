@@ -205,7 +205,14 @@ Open http://localhost:5173, create an account, and complete the tutorial or jump
 
 ## Sandbox model
 
-Bot code runs in a Web Worker, isolated from the DOM and main thread. The engine gives each bot up to 50ms per tick to respond with a command. Bots that stall for 30 consecutive ticks are terminated. `Math.random()` works normally in bot code (results are not reproducible — replays store full state snapshots rather than re-executing code).
+Bot code runs in a sandboxed environment in both the browser and on the server:
+
+- **Browser**: Web Worker, isolated from the DOM and main thread. Up to 33ms per tick.
+- **Server** (ladder matches): Node.js `worker_threads` with `vm.createContext` — no access to `require`, `process`, `fs`, or any Node.js built-in. Up to 33ms per tick.
+
+Bots that stall for 30 consecutive ticks are terminated. The sandbox behaviour is intentionally equivalent between browser and server so bots behave the same whether you're testing locally or running a ranked match.
+
+`Math.random()` works normally in bot code (results are not reproducible — replays store full state snapshots rather than re-executing code).
 
 ## Roadmap
 

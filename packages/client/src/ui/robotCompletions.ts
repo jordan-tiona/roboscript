@@ -146,6 +146,88 @@ const THIS_COMPLETIONS: Completion[] = [
   { label: "setTurnGunLeftRadians", type: "method", detail: "(radians: number) => void", apply: "setTurnGunLeftRadians(${radians})", info: "Queue a counter-clockwise gun rotation in radians." },
   { label: "setTurnGunRightRadians", type: "method", detail: "(radians: number) => void", apply: "setTurnGunRightRadians(${radians})", info: "Queue a clockwise gun rotation in radians." },
   { label: "setFire", type: "method", detail: "(power?: number) => void", apply: "setFire(${1})", info: "Queue a shot at the given power for the next execute() call." },
+
+  // Event callbacks
+  { label: "onHitByBullet", type: "method", detail: "(e: HitByBulletEvent) => void", apply: "onHitByBullet(e) {\n  ${}\n}", info: "Called when your bot is hit by a bullet this tick." },
+  { label: "onHitWall", type: "method", detail: "(e: HitWallEvent) => void", apply: "onHitWall(e) {\n  ${}\n}", info: "Called when your bot hits a wall this tick." },
+  { label: "onHitObstacle", type: "method", detail: "(e: HitObstacleEvent) => void", apply: "onHitObstacle(e) {\n  ${}\n}", info: "Called when your bot hits a terrain obstacle this tick." },
+  { label: "onBulletHit", type: "method", detail: "(e: BulletHitEvent) => void", apply: "onBulletHit(e) {\n  ${}\n}", info: "Called when one of your bullets hits an enemy this tick." },
+  { label: "onBotCollision", type: "method", detail: "(e: BotCollisionEvent) => void", apply: "onBotCollision(e) {\n  ${}\n}", info: "Called when your bot collides with another bot this tick." },
+  { label: "onDeath", type: "method", detail: "() => void", apply: "onDeath() {\n  ${}\n}", info: "Called when your bot is eliminated." },
+  { label: "onBattleEnd", type: "method", detail: "() => void", apply: "onBattleEnd() {\n  ${}\n}", info: "Called for all bots when the battle ends, win or lose. Good place to log final stats." },
+];
+
+// ── game.* completions ────────────────────────────────────────────────────────
+
+const GAME_COMPLETIONS: Completion[] = [
+  { label: "tick", type: "property", detail: "number", info: "Current game tick number. Available to any class, not just Robot subclasses." },
+  { label: "arenaWidth", type: "property", detail: "number", info: "Total width of the arena in units." },
+  { label: "arenaHeight", type: "property", detail: "number", info: "Total height of the arena in units." },
+  { label: "zoneRadius", type: "property", detail: "number", info: "Current damage zone radius. Bots outside this radius take damage each tick." },
+];
+
+// ── Top-level global function completions ─────────────────────────────────────
+
+const GLOBAL_COMPLETIONS: Completion[] = [
+  {
+    label: "normalRelativeAngle", type: "function",
+    detail: "(angle: number) => number",
+    apply: "normalRelativeAngle(${angle})",
+    info: "Normalizes an angle to the range (-180, 180]. Use to get the shortest signed difference between two headings.",
+  },
+  {
+    label: "normalAbsoluteAngle", type: "function",
+    detail: "(angle: number) => number",
+    apply: "normalAbsoluteAngle(${angle})",
+    info: "Normalizes an angle to the range [0, 360). Use to keep a heading in standard compass form.",
+  },
+  {
+    label: "normalRelativeAngleRadians", type: "function",
+    detail: "(angle: number) => number",
+    apply: "normalRelativeAngleRadians(${angle})",
+    info: "Normalizes a radian angle to the range (-π, π]. Radian equivalent of normalRelativeAngle — use when working with Math.atan2 results.",
+  },
+];
+
+// ── Math.* completions ────────────────────────────────────────────────────────
+
+const MATH_COMPLETIONS: Completion[] = [
+  // Constants
+  { label: "PI", type: "constant", detail: "number", info: "π ≈ 3.14159. Ratio of a circle's circumference to its diameter." },
+  { label: "E", type: "constant", detail: "number", info: "Euler's number ≈ 2.71828." },
+  { label: "SQRT2", type: "constant", detail: "number", info: "√2 ≈ 1.41421." },
+  { label: "SQRT1_2", type: "constant", detail: "number", info: "1/√2 ≈ 0.70710." },
+  { label: "LN2", type: "constant", detail: "number", info: "Natural log of 2 ≈ 0.69314." },
+  { label: "LN10", type: "constant", detail: "number", info: "Natural log of 10 ≈ 2.30258." },
+  { label: "LOG2E", type: "constant", detail: "number", info: "Log base 2 of e ≈ 1.44269." },
+  { label: "LOG10E", type: "constant", detail: "number", info: "Log base 10 of e ≈ 0.43429." },
+  // Common methods
+  { label: "abs", type: "method", detail: "(x: number) => number", apply: "abs(${x})", info: "Absolute value of x." },
+  { label: "ceil", type: "method", detail: "(x: number) => number", apply: "ceil(${x})", info: "Smallest integer greater than or equal to x." },
+  { label: "floor", type: "method", detail: "(x: number) => number", apply: "floor(${x})", info: "Largest integer less than or equal to x." },
+  { label: "round", type: "method", detail: "(x: number) => number", apply: "round(${x})", info: "Rounds x to the nearest integer." },
+  { label: "trunc", type: "method", detail: "(x: number) => number", apply: "trunc(${x})", info: "Integer part of x, discarding the fraction." },
+  { label: "sign", type: "method", detail: "(x: number) => number", apply: "sign(${x})", info: "Returns -1, 0, or 1 depending on the sign of x." },
+  { label: "min", type: "method", detail: "(...values: number[]) => number", apply: "min(${a}, ${b})", info: "Returns the smallest of the given values." },
+  { label: "max", type: "method", detail: "(...values: number[]) => number", apply: "max(${a}, ${b})", info: "Returns the largest of the given values." },
+  { label: "pow", type: "method", detail: "(base: number, exp: number) => number", apply: "pow(${base}, ${exp})", info: "Returns base raised to the power of exp." },
+  { label: "sqrt", type: "method", detail: "(x: number) => number", apply: "sqrt(${x})", info: "Square root of x." },
+  { label: "cbrt", type: "method", detail: "(x: number) => number", apply: "cbrt(${x})", info: "Cube root of x." },
+  { label: "hypot", type: "method", detail: "(...values: number[]) => number", apply: "hypot(${a}, ${b})", info: "Square root of the sum of squares. hypot(a, b) = distance between two points." },
+  { label: "random", type: "method", detail: "() => number", apply: "random()", info: "Random float in [0, 1)." },
+  // Trig
+  { label: "sin", type: "method", detail: "(x: number) => number", apply: "sin(${x})", info: "Sine of x (radians)." },
+  { label: "cos", type: "method", detail: "(x: number) => number", apply: "cos(${x})", info: "Cosine of x (radians)." },
+  { label: "tan", type: "method", detail: "(x: number) => number", apply: "tan(${x})", info: "Tangent of x (radians)." },
+  { label: "asin", type: "method", detail: "(x: number) => number", apply: "asin(${x})", info: "Arcsine of x in radians. Input range [-1, 1]." },
+  { label: "acos", type: "method", detail: "(x: number) => number", apply: "acos(${x})", info: "Arccosine of x in radians. Input range [-1, 1]." },
+  { label: "atan", type: "method", detail: "(x: number) => number", apply: "atan(${x})", info: "Arctangent of x in radians." },
+  { label: "atan2", type: "method", detail: "(y: number, x: number) => number", apply: "atan2(${y}, ${x})", info: "Angle in radians between the positive x-axis and the point (x, y). Range: (-π, π]." },
+  // Log / exp
+  { label: "log", type: "method", detail: "(x: number) => number", apply: "log(${x})", info: "Natural logarithm (base e) of x." },
+  { label: "log2", type: "method", detail: "(x: number) => number", apply: "log2(${x})", info: "Base-2 logarithm of x." },
+  { label: "log10", type: "method", detail: "(x: number) => number", apply: "log10(${x})", info: "Base-10 logarithm of x." },
+  { label: "exp", type: "method", detail: "(x: number) => number", apply: "exp(${x})", info: "e raised to the power of x." },
 ];
 
 // ── EnemyView property completions ────────────────────────────────────────────
@@ -173,6 +255,28 @@ export function robotCompletionSource(context: CompletionContext): CompletionRes
     const dot = thisMatch.text.indexOf(".");
     const from = thisMatch.from + dot + 1;
     return { from, options: THIS_COMPLETIONS, validFor: /^\w*$/ };
+  }
+
+  // Match bare global function names (not preceded by a dot)
+  const globalWord = context.matchBefore(/\b\w+/);
+  if (globalWord && context.state.doc.sliceString(globalWord.from - 1, globalWord.from) !== ".") {
+    return { from: globalWord.from, options: GLOBAL_COMPLETIONS, validFor: /^\w*$/ };
+  }
+
+  // Match "Math.<partial>"
+  const mathMatch = context.matchBefore(/\bMath\.\w*/);
+  if (mathMatch) {
+    const dot = mathMatch.text.indexOf(".");
+    const from = mathMatch.from + dot + 1;
+    return { from, options: MATH_COMPLETIONS, validFor: /^\w*$/ };
+  }
+
+  // Match "game.<partial>"
+  const gameMatch = context.matchBefore(/\bgame\.\w*/);
+  if (gameMatch) {
+    const dot = gameMatch.text.indexOf(".");
+    const from = gameMatch.from + dot + 1;
+    return { from, options: GAME_COMPLETIONS, validFor: /^\w*$/ };
   }
 
   // Match "<identifier>.<partial>" for likely EnemyView accesses

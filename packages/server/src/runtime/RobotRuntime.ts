@@ -394,6 +394,7 @@ export class RobotRuntime {
   onBulletHit(_e: BulletHitEvent): void | Promise<void> {}
   onBotCollision(_e: BotCollisionEvent): void | Promise<void> {}
   onDeath(): void {}
+  onBattleEnd(): void {}
 
   async run(): Promise<void> {
     throw new Error("Override run() in your bot class");
