@@ -1,0 +1,12 @@
+# Keep LF in the working tree on every platform. Bot source under
+# packages/client/src/bots/code is imported with Vite's `?raw` and shown
+# verbatim in the editor, so CRLF would leak into saved bot code.
+* text=auto eol=lf
+
+# Binary / generated
+pnpm-lock.yaml -diff
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary

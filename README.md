@@ -32,9 +32,10 @@ class MyRobot extends Robot {
 - **Tutorial** — 7 progressive challenges that introduce movement, aiming, firing, and event handling
 - **Free play** — fight any combination of 8 built-in example bots with optional terrain obstacles
 - **Accounts** — register and save your bots to the server; pick up where you left off from any device
-- **CodeMirror editor** — syntax highlighting, Tab indentation, and robot API autocomplete (`this.`, `e.`)
+- **CodeMirror editor** — syntax highlighting, Tab indentation, and robot API autocomplete (`this.`, `e.`, `game.`, `Math.`, global utility functions)
 - **Shield system** — bots have a regenerating shield that absorbs bullet damage before energy
 - **Shrinking zone** — after 30 seconds, a kill zone begins closing in; bots outside it drain energy
+- **Speed control** — slow battles down to 1/16× speed from the toolbar for debugging
 
 ## Bot API
 
@@ -112,6 +113,25 @@ this.bulletSpeed(power)         // travel speed for a given bullet power
 this.isOccupied(x, y)           // true if point is outside arena or inside an obstacle
 ```
 
+### Global sandbox objects and functions
+
+These are available to any class in your bot file, not just Robot subclasses:
+
+```js
+// game — live match state, readable from helper classes
+game.tick          // current game tick
+game.arenaWidth    // arena width in units
+game.arenaHeight   // arena height in units
+game.zoneRadius    // current kill zone radius
+
+// Angle utilities (degrees)
+normalRelativeAngle(angle)    // normalize to (-180, 180]
+normalAbsoluteAngle(angle)    // normalize to [0, 360)
+
+// Angle utility (radians) — use with Math.atan2 results
+normalRelativeAngleRadians(angle)  // normalize to (-π, π]
+```
+
 ### Event callbacks (Style B — override and optionally make async)
 
 ```js
@@ -120,7 +140,8 @@ onBulletHit(e)     // e.victimId
 onHitWall(e)       // e.damage
 onHitObstacle(e)
 onBotCollision(e)  // e.otherId, e.damage
-onDeath()
+onDeath()          // called when your bot is eliminated
+onBattleEnd()      // called for all bots when the match ends (win or lose)
 ```
 
 > **Note:** Only declare a callback `async` if you actually `await` something inside it. Declaring it async without awaiting causes a tick skip.
@@ -189,19 +210,111 @@ roboscript/
 
 ## Getting started
 
+### Prerequisites
+
+| Tool | Version | Notes |
+|---|---|---|
+| Node.js | >= 24 | `packageManager` pins pnpm, so enable Corepack: `corepack enable` |
+| pnpm | >= 10 | `corepack enable pnpm` gets the pinned version automatically |
+| Docker | any recent | Only used to run PostgreSQL via `docker-compose.yml` |
+
+### First run
+
 ```bash
+git clone git@github.com:jordan-tiona/roboscript.git
+cd roboscript
+corepack enable
 pnpm install
 
-# Terminal 1 — API server (requires PostgreSQL)
-pnpm --filter @roboscript/server dev
+# Start PostgreSQL (postgres:16-alpine, exposed on localhost:5432)
+pnpm db:up
 
-# Terminal 2 — frontend
-pnpm --filter @roboscript/client dev
+# Create the server env file, then fill in the blanks (see below)
+cp packages/server/.env.example packages/server/.env
+
+# Apply the Drizzle schema to the fresh database
+pnpm --filter @roboscript/server db:migrate
+
+# Run client + server together
+pnpm dev:all
 ```
 
-Copy `.env.example` to `.env` in `packages/server` and fill in `DATABASE_URL` and `BETTER_AUTH_SECRET`.
-
 Open http://localhost:5173, create an account, and complete the tutorial or jump straight to free play.
+
+To run the two halves in separate terminals instead: `pnpm dev:server` and `pnpm dev`.
+
+### Environment variables
+
+`packages/server/.env` is gitignored and must be created on each machine. Minimum for local dev:
+
+```
+DATABASE_URL=postgres://roboscript:roboscript@localhost:5432/roboscript
+BETTER_AUTH_SECRET=<any random string; openssl rand -hex 32>
+BETTER_AUTH_URL=http://localhost:8080/api/auth
+CLIENT_ORIGIN=http://localhost:5173
+PORT=8080
+```
+
+`DATABASE_URL` above matches the credentials baked into `docker-compose.yml`. `SMTP_*` may be left blank
+(password-reset emails will fail, nothing else). `RS_RECAPTCHA_SECRET_KEY` may be left blank — verification
+is skipped when it is unset.
+
+## Developing on Windows
+
+The project runs natively on Windows (PowerShell), no WSL required. All npm scripts are cross-platform and
+nothing in the codebase shells out or hardcodes POSIX paths.
+
+### One-time setup
+
+1. **Install Node 24+** — [nodejs.org](https://nodejs.org) or `winget install OpenJS.NodeJS.LTS`.
+2. **Enable Corepack** in an *elevated* PowerShell so it can create shims:
+   ```powershell
+   corepack enable
+   ```
+   The `packageManager` field in the root `package.json` pins the pnpm version, so nothing else is needed.
+3. **Install Docker Desktop** — [docker.com](https://www.docker.com/products/docker-desktop/), with the
+   WSL2 backend (its default). This is only used for the PostgreSQL container.
+4. **Enable long paths.** pnpm's nested `node_modules` layout plus deep package names can exceed the legacy
+   260-character limit:
+   ```powershell
+   git config --system core.longpaths true
+   # and, elevated:
+   New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
+     -Name LongPathsEnabled -Value 1 -PropertyType DWORD -Force
+   ```
+5. **Enable Developer Mode** (Settings → System → For developers). pnpm links workspace packages with
+   symlinks/junctions; Developer Mode lets it create them without administrator rights.
+
+### Running it
+
+```powershell
+git clone git@github.com:jordan-tiona/roboscript.git
+cd roboscript
+pnpm install
+
+pnpm db:up                                  # starts PostgreSQL in Docker
+Copy-Item packages\server\.env.example packages\server\.env
+# edit packages\server\.env — see "Environment variables" above
+
+pnpm --filter @roboscript/server db:migrate
+pnpm dev:all
+```
+
+### Windows-specific notes
+
+- **Line endings.** `.gitattributes` forces `eol=lf` for the whole tree. Do not override it with
+  `core.autocrlf=true` — bot source under `packages/client/src/bots/code/` is imported with Vite's `?raw`
+  and rendered verbatim in the CodeMirror editor, so CRLF would end up inside saved bot code.
+- **Case sensitivity.** NTFS is case-insensitive but Linux CI and the Fly deploy image are not. An import
+  like `./RobotRuntime.js` written as `./robotruntime.js` will work locally and fail in the container —
+  match the file's real casing.
+- **Secrets don't come from git.** `packages/server/.env` is gitignored; copy the values across manually
+  (SMTP password and the reCAPTCHA secret in particular).
+- **Ports.** 5173 (Vite) and 8080 (Hono) must be free; Windows' "excluded port ranges" reserved by
+  Hyper-V occasionally claim 8080. Check with `netsh interface ipv4 show excludedportrange protocol=tcp`
+  and set `PORT` in `.env` if it collides.
+- **File watching.** `vite` and `tsx watch` use native filesystem events on NTFS — no polling flags needed.
+  This only breaks if the repo lives on a network drive or inside a WSL filesystem accessed from Windows.
 
 ## Sandbox model
 
