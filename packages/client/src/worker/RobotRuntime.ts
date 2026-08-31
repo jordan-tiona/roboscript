@@ -88,6 +88,7 @@ export class RobotRuntime {
   // remainingAhead/Turn/GunTurn/RadarTurn persist across ticks until consumed
   private _pending: {
     remainingAhead?: number;
+    desiredVelocity?: number;
     remainingTurn?: number;
     remainingGunTurn?: number;
     fire?: boolean;
@@ -376,6 +377,11 @@ export class RobotRuntime {
   /** Set distance to travel; positive = forward, negative = backward. */
   setMove(distance: number): void  { this._pending.remainingAhead = distance; }
 
+  /** Set the speed (0–8) used when consuming distance from setAhead/setBack/setMove. Persists until changed. */
+  setVelocity(velocity: number): void {
+    this._pending.desiredVelocity = Math.min(Math.abs(velocity), MAX_SPEED);
+  }
+
   /** Set total body rotation in degrees (positive = clockwise). */
   setTurn(degrees: number): void        { this._pending.remainingTurn    =  degrees; }
   /** Set total body rotation in radians (positive = clockwise). */
@@ -433,7 +439,8 @@ export class RobotRuntime {
 
     if (this._pending.remainingAhead !== undefined) {
       const rem = this._pending.remainingAhead;
-      const vel = Math.sign(rem) * Math.min(Math.abs(rem), MAX_SPEED);
+      const speed = this._pending.desiredVelocity ?? MAX_SPEED;
+      const vel = Math.sign(rem) * Math.min(Math.abs(rem), speed);
       cmd.desiredVelocity = vel;
       const next = rem - vel;
       if (Math.abs(next) < 0.5) delete this._pending.remainingAhead;

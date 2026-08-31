@@ -12,9 +12,11 @@ export class GameLoop {
   private ctx: CanvasRenderingContext2D;
   private rafId = 0;
   private tickTimer: ReturnType<typeof setInterval> | null = null;
+  private tickInProgress = false;
   private latestState: GameState | null = null;
   private running = false;
   private onGameOver: ((winnerId: string | null) => void) | null = null;
+  private onLog: LogCallback | undefined;
   private countdown: number | null = null;
   private speedFraction = 1;
 
@@ -22,6 +24,7 @@ export class GameLoop {
 
   constructor(canvas: HTMLCanvasElement, bots: BotEntry[], onGameOver?: (winnerId: string | null) => void, onLog?: LogCallback, arenaOptions?: BuildOptions, noCountdown = false) {
     this.onGameOver = onGameOver ?? null;
+    this.onLog = onLog;
     this.noCountdown = noCountdown;
     this.driver = new GameDriver(bots, onLog, arenaOptions);
     this.canvas = canvas;
@@ -72,10 +75,23 @@ export class GameLoop {
       if (this.driver.getState().isOver) {
         this.stopTicking();
         this.running = false;
+        this.driver.notifyBattleEnd();
         this.onGameOver?.(this.driver.getState().winnerId);
         return;
       }
-      this.driver.runTick((s) => { this.latestState = s; }).catch(console.error);
+      if (this.tickInProgress) return;
+      this.tickInProgress = true;
+      this.driver.runTick((s) => { this.latestState = s; })
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : String(err);
+          const tick = this.driver.getState().tick;
+          this.onLog?.("Engine", `Crashed at tick ${tick}: ${msg}`, tick, "error");
+          console.error("Engine tick error:", err);
+          this.running = false;
+          this.stopTicking();
+          this.onGameOver?.(null);
+        })
+        .finally(() => { this.tickInProgress = false; });
     }, 1000 / TICKS_PER_SECOND / this.speedFraction);
   }
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { EditorView, basicSetup } from "codemirror";
+import { scrollPastEnd } from "@codemirror/view";
 import { keymap } from "@codemirror/view";
 import { javascript } from "@codemirror/lang-javascript";
 import { oneDark } from "@codemirror/theme-one-dark";
@@ -30,6 +31,11 @@ export function Editor({ initialCode, onChange }: Props) {
           { key: "Tab", run: indentMore },
           { key: "Shift-Tab", run: indentLess },
         ]),
+        scrollPastEnd(),
+        EditorView.theme({
+          "&": { height: "100%" },
+          ".cm-scroller": { overflow: "auto" },
+        }),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) onChange(update.state.doc.toString());
         }),
@@ -47,7 +53,7 @@ export function Editor({ initialCode, onChange }: Props) {
   return (
     <div
       ref={containerRef}
-      style={{ flex: 1, overflow: "auto", fontSize: "13px" }}
+      style={{ flex: 1, minHeight: 0, overflow: "hidden", fontSize: "13px" }}
     />
   );
 }

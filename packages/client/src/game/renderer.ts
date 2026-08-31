@@ -141,9 +141,9 @@ export function renderFrame(
     const labelAlpha = zoneWarning ? 0.5 + ((Math.sin(state.tick * 0.15) + 1) / 2) * 0.4 : 0.7;
     ctx.globalAlpha = labelAlpha;
     ctx.fillStyle = zoneActive ? "#ff6060" : "#ffa040";
-    ctx.font = "11px monospace";
+    ctx.font = "bold 16px monospace";
     ctx.textAlign = "center";
-    ctx.fillText(label, aW / 2, 16);
+    ctx.fillText(label, aW / 2, 22);
     ctx.globalAlpha = 1;
   }
 

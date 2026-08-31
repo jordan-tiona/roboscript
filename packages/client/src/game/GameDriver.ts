@@ -2,8 +2,8 @@ import { tick, buildInitialState } from "@roboscript/engine";
 import type { GameState, BotCommand, BuildOptions } from "@roboscript/engine";
 import type { MainToWorker, WorkerToMain, EnemyView } from "../worker/protocol.js";
 
-const TICK_DEADLINE_MS = 33;  // max ms to wait for a bot command per tick (~1 tick at 30 TPS)
-const MAX_STALL_TICKS = 30;   // consecutive stalls before bot is terminated
+const TICK_DEADLINE_MS = 200; // ms before a non-responsive bot counts as a stall (~6 ticks at 30 TPS)
+const MAX_STALL_TICKS = 15;   // consecutive stalls before bot is terminated (~3s total)
 
 export interface BotEntry {
   id: string;
@@ -67,7 +67,12 @@ export class GameDriver {
         };
       });
 
-      worker.onerror = (e) => console.error(`Worker error for ${bot.id}:`, e);
+      worker.onerror = (e) => {
+        const botName = bots.find((b) => b.id === bot.id)?.name ?? bot.id;
+        const msg = e.message ? `Worker error: ${e.message}` : "Worker error (unknown)";
+        this.onLog?.(botName, msg, this.state.tick, "error");
+        console.error(`Worker error for ${bot.id}:`, e);
+      };
 
       const botState = this.state.bots.find((b) => b.id === bot.id)!;
       const initMsg: MainToWorker = {
@@ -207,7 +212,12 @@ export class GameDriver {
           this.tickResolvers.delete(bot.id);
           const stalls = (this.stallCounts.get(bot.id) ?? 0) + 1;
           this.stallCounts.set(bot.id, stalls);
-          if (stalls >= MAX_STALL_TICKS) this.terminateBot(bot.id);
+          const botName = this.state.bots.find((b) => b.id === bot.id)?.name ?? bot.id;
+          if (stalls >= MAX_STALL_TICKS) {
+            this.terminateBot(bot.id, botName);
+          } else if (stalls === 1) {
+            this.onLog?.(botName, `Missed tick deadline at tick ${tickId} — may be stalling`, tickId, "error");
+          }
           resolve();
         }, TICK_DEADLINE_MS);
 
@@ -225,16 +235,34 @@ export class GameDriver {
 
     const commands = [...this.pendingCommands.values()];
     this.pendingCommands.clear();
-    this.state = tick(this.state, commands);
+    try {
+      this.state = tick(this.state, commands);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.onLog?.("Engine", `Engine crash at tick ${this.state.tick}: ${msg}`, this.state.tick, "error");
+      console.error(`Engine crash at tick ${this.state.tick}:`, err);
+      throw err;
+    }
     onState(this.state);
   }
 
-  private terminateBot(botId: string): void {
+  private terminateBot(botId: string, botName?: string): void {
     const worker = this.workers.get(botId);
-    if (worker) {
-      worker.terminate();
-      this.workers.delete(botId);
+    if (!worker) return;
+    worker.terminate();
+    this.workers.delete(botId);
+    const name = botName ?? this.state.bots.find((b) => b.id === botId)?.name ?? botId;
+    this.onLog?.(name, `Terminated after ${MAX_STALL_TICKS} consecutive missed tick deadlines`, this.state.tick, "error");
+  }
+
+  notifyBattleEnd(): void {
+    for (const [, worker] of this.workers) {
+      worker.postMessage({ type: "terminate" } satisfies MainToWorker);
+      setTimeout(() => worker.terminate(), 500);
     }
+    this.workers.clear();
+    this.tickResolvers.clear();
+    this.pendingCommands.clear();
   }
 
   stop(): void {

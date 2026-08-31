@@ -63,12 +63,13 @@ export function DashboardPage() {
 
   // ── Bot/editor state ────────────────────────────────────────────────────────
   const [playerCode, setPlayerCode] = useState(() => localStorage.getItem("playerCode") ?? DEFAULT_BOT_CODE);
-  const [playerName, setPlayerName] = useState("MyRobot");
+  const [playerName, setPlayerName] = useState(() => localStorage.getItem("playerName") ?? "MyRobot");
   const [running, setRunning]       = useState(false);
   const [speed, setSpeed]           = useState(1);
   const [resetKey, setResetKey]     = useState(0);
   const [logs, setLogs]             = useState<LogEntry[]>([]);
   const logIdRef    = useRef(0);
+  const logBufferRef = useRef<LogEntry[]>([]);
   const arenaRef    = useRef<ArenaHandle>(null);
   const loopRef     = useRef<GameLoop | null>(null);
   const playerIdRef = useRef("bot-player");
@@ -107,12 +108,28 @@ export function DashboardPage() {
     return () => window.removeEventListener("selectstart", prevent as EventListener);
   }, []);
 
+  // ── Log flushing — accumulate in a ref, flush to state on each animation frame
+  //    so rapid console.log calls don't trigger a React re-render per message.
+  useEffect(() => {
+    let rafId: number;
+    const flush = () => {
+      const buf = logBufferRef.current;
+      if (buf.length > 0) {
+        logBufferRef.current = [];
+        setLogs((prev) => {
+          const combined = [...prev, ...buf];
+          return combined.length > 500 ? combined.slice(combined.length - 500) : combined;
+        });
+      }
+      rafId = requestAnimationFrame(flush);
+    };
+    rafId = requestAnimationFrame(flush);
+    return () => cancelAnimationFrame(rafId);
+  }, []);
+
   // ── Game callbacks ──────────────────────────────────────────────────────────
   const handleLog = useCallback((botName: string, message: string, tick: number, type?: "log" | "error") => {
-    setLogs((prev) => {
-      const entry: LogEntry = { id: logIdRef.current++, botName, message, tick, type: type ?? "log" };
-      return prev.length >= 500 ? [...prev.slice(1), entry] : [...prev, entry];
-    });
+    logBufferRef.current.push({ id: logIdRef.current++, botName, message, tick, type: type ?? "log" });
   }, []);
 
   const handleGameOver = useCallback((winnerId: string | null) => {
@@ -164,6 +181,7 @@ export function DashboardPage() {
 
   const handleReset = useCallback(() => {
     handleStop();
+    logBufferRef.current = [];
     setLogs([]);
     setResetKey((k) => k + 1);
   }, [handleStop]);
@@ -176,6 +194,7 @@ export function DashboardPage() {
   const handleLoadSave = useCallback((name: string, code: string) => {
     setPlayerName(name);
     setPlayerCode(code);
+    localStorage.setItem("playerName", name);
     localStorage.setItem("playerCode", code);
     setResetKey((k) => k + 1);
   }, []);
@@ -192,7 +211,7 @@ export function DashboardPage() {
           <div style={tabStyle(true)}>
             <input
               value={playerName}
-              onChange={(e) => setPlayerName(e.target.value)}
+              onChange={(e) => { setPlayerName(e.target.value); localStorage.setItem("playerName", e.target.value); }}
               disabled={running}
               placeholder="Bot name"
               style={{ background: "transparent", border: "none", color: "inherit", fontFamily: "monospace", fontSize: "12px", outline: "none", width: "100px" }}
@@ -316,7 +335,7 @@ export function DashboardPage() {
           <Arena ref={arenaRef} />
         </div>
 
-        <LogPanel entries={logs} onClear={() => setLogs([])} />
+        <LogPanel entries={logs} onClear={() => { logBufferRef.current = []; setLogs([]); }} />
 
         {/* Overlays */}
         <DocsPanel open={docsOpen} onClose={() => setDocsOpen(false)} />

@@ -18,7 +18,7 @@ export function LogPanel({ entries, onClear }: Props) {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "instant" });
-  }, [entries.length]);
+  }, [entries[entries.length - 1]?.id]);
 
   return (
     <div style={{ width: "100%", height: "160px", display: "flex", flexDirection: "column", border: "1px solid #2a2a4e", borderRadius: "3px", overflow: "hidden" }}>
