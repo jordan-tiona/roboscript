@@ -22,6 +22,13 @@
       "when": 1777020398038,
       "tag": "0002_bot_saves",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788151822212,
+      "tag": "0003_solid_kabuki",
+      "breakpoints": true
     }
   ]
 }
